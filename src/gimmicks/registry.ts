@@ -40,6 +40,51 @@ export const GIMMICKS = [
     component: () => import('./clicker'),
   },
   {
+    id: 'keycap',
+    name: '키캡',
+    kind: 'discrete',
+    /**
+     * 기본 축은 적축. 아래 variants[0]과 같은 값을 둔다 — 저장된 축을 못
+     * 찾았을 때 셸이 여기로 떨어진다.
+     */
+    haptic: { type: 'preset', name: 'plunk' },
+    /**
+     * 스위치 축 3종.
+     *
+     * 화면에선 손가락이 실제로 내려가지 않으므로 축의 차이는 터치 다운
+     * 순간에 쏘는 파형의 차이로 환원된다. 그래서 `_kinds/discrete.tsx`는
+     * 손댈 필요가 없다.
+     *
+     * 키보드 계열 프리셋은 최상위에 `keyboardMechanical`과
+     * `keyboardMembrane` 둘뿐이다. `keyboardPress`/`keyboardRelease`/
+     * `keyboardTap`은 `Presets.System.Android.*` 아래에 있어서
+     * `presets.ts`가 의도적으로 제외한 플랫폼 시스템 햅틱이다 — 안드로이드
+     * 전용이라 §0의 크로스 플랫폼 기준에 맞지 않는다. 그래서 적축은
+     * 최상위 151개 중에서 골랐다.
+     *
+     * ⚠️ 프리셋 3개 모두 미검증이다. §10은 코드를 짜기 전에 Pulsar Live
+     * Preview에서 실제로 느껴보고 고르라고 지시하는데, 그건 실기기가
+     * 필요한 작업이라 아직 못 했다. 클리커·다이얼과 같은 상태다.
+     *
+     * 실기기에서 확인한 뒤 교체할 것. 후보:
+     *   적축(걸림 없이 쭉)   — plunk, thud, poke, push, chip
+     *   갈축(중간에 걸림)     — keyboardMechanical, snap, latch, ratchet
+     *   사일런트(둔탁·조용)   — keyboardMembrane, thud, pip, wisp
+     *
+     * 갈축이 2단(중간 걸림 + 바닥) 느낌을 못 내면 프리셋 대신
+     * `{ type: 'pattern', pattern: ... }`으로 바꾼다 — `discretePattern`에
+     * 시각차를 둔 트랜지언트 2개를 넣으면 된다. §4 원칙 1대로 햅틱이
+     * 데이터이므로 교체는 이 블록 안에서 끝난다.
+     */
+    variants: [
+      { id: 'linear', name: '적축', haptic: { type: 'preset', name: 'plunk' } },
+      { id: 'tactile', name: '갈축', haptic: { type: 'preset', name: 'keyboardMechanical' } },
+      { id: 'silent', name: '사일런트', haptic: { type: 'preset', name: 'keyboardMembrane' } },
+    ],
+    config: {/** 릴리스 햅틱 없음 — 축의 차이는 누를 때 한 방으로 표현한다. */},
+    component: () => import('./keycap'),
+  },
+  {
     id: 'dial',
     name: '다이얼',
     kind: 'detented',
