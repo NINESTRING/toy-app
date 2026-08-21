@@ -9,6 +9,14 @@ dist/
 web-build/
 
 # Native
+#
+# ios/ 와 android/ 는 커밋하지 않는다 (Expo CNG).
+# app.config.ts + config plugin이 유일한 진실 소스이고, 네이티브 프로젝트는
+# `npx expo prebuild`로 언제든 재생성된다. 커밋해두면 app.config.ts를 바꿨을 때
+# 네이티브 쪽이 조용히 어긋난다. (ios/ 는 Pods + Skia xcframework로 1.2GB다)
+/ios
+/android
+
 *.orig.*
 *.jks
 *.p8

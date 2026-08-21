@@ -3,11 +3,16 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "dev": "expo start -c",
-    "android": "expo start -c --android",
-    "ios": "expo start -c --ios",
-    "web": "expo start -c --web",
-    "clean": "rm -rf .expo node_modules"
+    "dev": "expo start --dev-client",
+    "dev:clear": "expo start --dev-client -c",
+    "ios": "expo run:ios --device",
+    "android": "expo run:android --device",
+    "prebuild": "expo prebuild",
+    "prebuild:clean": "expo prebuild --clean",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" app.config.ts",
+    "deps:check": "expo install --check",
+    "clean": "rm -rf .expo node_modules ios android"
   },
   "dependencies": {
     "@rn-primitives/accordion": "^1.5.2",
