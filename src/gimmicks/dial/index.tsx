@@ -15,10 +15,10 @@ import type { GimmickScreenProps } from '@/gimmicks/types';
  * 물리·그리기 기믹(스피너, 구슬)이고, 다이얼은 View 회전 하나로 끝난다.
  * 첫 Physics 기믹이 들어올 때 Skia가 등장한다.
  */
-export default function Dial({ gimmick, onInteract }: GimmickScreenProps<'detented'>) {
+export default function Dial({ gimmick, variant, onInteract }: GimmickScreenProps<'detented'>) {
   return (
     <View style={CONTAINER}>
-      <DetentedGimmick haptic={gimmick.haptic} config={gimmick.config} onInteract={onInteract}>
+      <DetentedGimmick haptic={variant.haptic} config={gimmick.config} onInteract={onInteract}>
         {({ angle }) => <Knob angle={angle} detentCount={gimmick.config.detentCount} />}
       </DetentedGimmick>
     </View>
@@ -67,7 +67,9 @@ const DetentTicks = React.memo(function DetentTicks({ count }: { count: number }
 const DIAL_SIZE = 260;
 const KNOB_SIZE = 200;
 
+/** 셸이 기믹에 콘텐츠 영역 전체를 준다. 채우고 가운데 정렬한다. */
 const CONTAINER: ViewStyle = {
+  flex: 1,
   alignItems: 'center',
   justifyContent: 'center',
 };

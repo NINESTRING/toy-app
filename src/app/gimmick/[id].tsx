@@ -8,10 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { findGimmick } from '@/gimmicks/registry';
-import type { Gimmick } from '@/gimmicks/types';
+import type { Gimmick, GimmickVariant, HapticSpec } from '@/gimmicks/types';
 import { stopHaptics } from '@/haptics/engine';
 import { useHapticCapability } from '@/haptics/useHapticCapability';
-import { useGimmickCount, useGimmickStore } from '@/store/gimmickState';
+import { useGimmickCount, useGimmickStore, useGimmickVariantId } from '@/store/gimmickState';
 
 /**
  * 기믹 화면.
@@ -44,12 +44,45 @@ export default function GimmickScreen() {
   return <GimmickView gimmick={gimmick} />;
 }
 
+/** `variants`가 없는 기믹의 합성 변형에 쓰는 id. */
+const DEFAULT_VARIANT_ID = 'default';
+
+/**
+ * 기믹의 변형 목록. 없으면 `haptic` 하나로 단일 변형을 합성한다.
+ *
+ * 이렇게 해두면 기믹 컴포넌트가 분기 없이 항상 `variant.haptic`만 보게 되고,
+ * 변형 개념을 모르는 기존 기믹(클리커·다이얼)도 그대로 동작한다.
+ */
+function variantsOf(gimmick: Gimmick): readonly GimmickVariant<HapticSpec>[] {
+  /**
+   * 유니온 배열에 직접 접근하면 TS가 시그니처를 합치지 못하므로 한 번 넓혀
+   * 받는다. 속성 타입은 공변이라 대입이 성립한다.
+   */
+  const variants: readonly GimmickVariant<HapticSpec>[] = gimmick.variants ?? [];
+  if (variants.length > 0) {
+    return variants;
+  }
+  return [{ id: DEFAULT_VARIANT_ID, name: gimmick.name, haptic: gimmick.haptic }];
+}
+
 function GimmickView({ gimmick }: { gimmick: Gimmick }) {
   const hydrate = useGimmickStore((state) => state.hydrate);
   const interact = useGimmickStore((state) => state.interact);
   const reset = useGimmickStore((state) => state.reset);
+  const setVariant = useGimmickStore((state) => state.setVariant);
   const count = useGimmickCount(gimmick.id);
   const capability = useHapticCapability();
+
+  const variants = React.useMemo(() => variantsOf(gimmick), [gimmick]);
+  const storedVariantId = useGimmickVariantId(gimmick.id);
+  /**
+   * 저장된 id가 현재 목록에 없으면 첫 변형으로 떨어진다 — §7 OTA로 축이
+   * 빠졌을 때 화면이 빈 상태가 되지 않게 한다.
+   */
+  const variant = React.useMemo(
+    () => variants.find((candidate) => candidate.id === storedVariantId) ?? variants[0],
+    [variants, storedVariantId]
+  );
 
   React.useEffect(() => {
     hydrate(gimmick.id);
@@ -91,21 +124,76 @@ function GimmickView({ gimmick }: { gimmick: Gimmick }) {
           ),
         }}
       />
-      <View className="flex-1 items-center justify-center gap-8 p-4">
-        {capability.needsFallback ? <HapticFallbackNotice /> : null}
+      {/*
+        기믹이 콘텐츠 영역 전체를 차지하고 셸 크롬이 그 위에 뜬다.
 
-        <React.Suspense fallback={<ActivityIndicator />}>
-          <Body gimmick={gimmick} onInteract={onInteract} />
+        키캡처럼 배경을 소유하는 기믹이 화면을 가득 채울 수 있어야 하기 때문이다.
+        기믹마다 플래그를 두는 대신 모든 기믹에 같은 모델을 적용한다 — 클리커·
+        다이얼은 컨테이너가 `flex: 1`로 가운데 정렬하므로 보이는 결과가 같다.
+      */}
+      <View className="flex-1">
+        <React.Suspense fallback={<LoadingBody />}>
+          <Body gimmick={gimmick} variant={variant} onInteract={onInteract} />
         </React.Suspense>
 
-        <Text className="text-muted-foreground font-mono text-sm">{count.toLocaleString()}</Text>
+        {/*
+          `box-none`이라 이 레이어 자체는 터치를 먹지 않는다. 버튼만 자기 몫을
+          가져가고 나머지는 아래 기믹으로 통과한다 — 배경 아무 데나 눌러도
+          딸깍하는 게 피젯 토이에 맞다.
+        */}
+        <View pointerEvents="box-none" className="absolute inset-0 justify-between p-4">
+          <View pointerEvents="box-none">
+            {capability.needsFallback ? <HapticFallbackNotice /> : null}
+          </View>
+
+          <View pointerEvents="box-none" className="items-center gap-3">
+            {/*
+              축 칩. 셸에 있으므로 `className`을 쓴다 — §1이 금지한 건 기믹 화면
+              내부이고, 여기는 매 프레임 스타일이 바뀌는 구간이 아니다. 변형이
+              2개 이상일 때만 나타나므로 클리커·다이얼 화면은 그대로다.
+            */}
+            {variants.length > 1 ? (
+              <View className="flex-row gap-2">
+                {variants.map((candidate) => (
+                  <Button
+                    key={candidate.id}
+                    size="sm"
+                    variant={candidate.id === variant.id ? 'default' : 'outline'}
+                    onPressIn={() => setVariant(gimmick.id, candidate.id)}>
+                    <Text>{candidate.name}</Text>
+                  </Button>
+                ))}
+              </View>
+            ) : null}
+
+            {/*
+              기믹 배경 위에 얹히므로 알약 배경을 준다. 키캡의 파란 배경에
+              회색 글씨만 있으면 안 읽힌다.
+            */}
+            <Text
+              pointerEvents="none"
+              className="text-muted-foreground bg-muted rounded-full px-2.5 py-1 font-mono text-sm">
+              {count.toLocaleString()}
+            </Text>
+          </View>
+        </View>
       </View>
     </>
   );
 }
 
+/** 기믹이 로드되는 동안. 기믹과 같은 자리를 차지해야 레이아웃이 튀지 않는다. */
+function LoadingBody() {
+  return (
+    <View className="flex-1 items-center justify-center">
+      <ActivityIndicator />
+    </View>
+  );
+}
+
 type GimmickBodyComponent = React.ComponentType<{
   gimmick: Gimmick;
+  variant: GimmickVariant<HapticSpec>;
   onInteract: () => void;
 }>;
 
