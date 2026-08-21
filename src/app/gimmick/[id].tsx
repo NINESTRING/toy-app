@@ -11,7 +11,7 @@ import { findGimmick } from '@/gimmicks/registry';
 import type { Gimmick, GimmickVariant, HapticSpec } from '@/gimmicks/types';
 import { stopHaptics } from '@/haptics/engine';
 import { useHapticCapability } from '@/haptics/useHapticCapability';
-import { useGimmickCount, useGimmickStore } from '@/store/gimmickState';
+import { useGimmickCount, useGimmickStore, useGimmickVariantId } from '@/store/gimmickState';
 
 /**
  * 기믹 화면.
@@ -69,15 +69,20 @@ function GimmickView({ gimmick }: { gimmick: Gimmick }) {
   const hydrate = useGimmickStore((state) => state.hydrate);
   const interact = useGimmickStore((state) => state.interact);
   const reset = useGimmickStore((state) => state.reset);
+  const setVariant = useGimmickStore((state) => state.setVariant);
   const count = useGimmickCount(gimmick.id);
   const capability = useHapticCapability();
 
-  /**
-   * 지금은 항상 기본 변형이다. 사용자 선택은 다음 태스크에서 붙는다 —
-   * 이 단계의 목표는 햅틱을 읽는 경로를 옮기는 것뿐이다.
-   */
   const variants = React.useMemo(() => variantsOf(gimmick), [gimmick]);
-  const variant = variants[0];
+  const storedVariantId = useGimmickVariantId(gimmick.id);
+  /**
+   * 저장된 id가 현재 목록에 없으면 첫 변형으로 떨어진다 — §7 OTA로 축이
+   * 빠졌을 때 화면이 빈 상태가 되지 않게 한다.
+   */
+  const variant = React.useMemo(
+    () => variants.find((candidate) => candidate.id === storedVariantId) ?? variants[0],
+    [variants, storedVariantId]
+  );
 
   React.useEffect(() => {
     hydrate(gimmick.id);
@@ -125,6 +130,25 @@ function GimmickView({ gimmick }: { gimmick: Gimmick }) {
         <React.Suspense fallback={<ActivityIndicator />}>
           <Body gimmick={gimmick} variant={variant} onInteract={onInteract} />
         </React.Suspense>
+
+        {/*
+          축 칩. 셸에 있으므로 `className`을 쓴다 — §1이 금지한 건 기믹 화면
+          내부이고, 여기는 매 프레임 스타일이 바뀌는 구간이 아니다. 변형이
+          2개 이상일 때만 나타나므로 클리커·다이얼 화면은 그대로다.
+        */}
+        {variants.length > 1 ? (
+          <View className="flex-row gap-2">
+            {variants.map((candidate) => (
+              <Button
+                key={candidate.id}
+                size="sm"
+                variant={candidate.id === variant.id ? 'default' : 'outline'}
+                onPressIn={() => setVariant(gimmick.id, candidate.id)}>
+                <Text>{candidate.name}</Text>
+              </Button>
+            ))}
+          </View>
+        ) : null}
 
         <Text className="text-muted-foreground font-mono text-sm">{count.toLocaleString()}</Text>
       </View>
