@@ -96,12 +96,20 @@ export type GimmickScreenProps<K extends GimmickKind = GimmickKind> = {
 
 | 축 | `id` | 프리셋 (초기값) | 배경 → 키캡 |
 |---|---|---|---|
-| 적축 | `linear` | `keyboardPress` | 파랑 → 노랑 |
+| 적축 | `linear` | `plunk` | 파랑 → 노랑 |
 | 갈축 | `tactile` | `keyboardMechanical` | 붉은기 → 크림 |
 | 사일런트 | `silent` | `keyboardMembrane` | 자턴 → 훈연 |
 
-세 이름 모두 설치된 Pulsar 1.7.0에 실제로 존재한다(프리셋 197개 중). 오타는
-`PresetName` 조건부 타입이 컴파일 타임에 잡는다.
+> **구현 중 정정.** 이 표는 처음에 적축을 `keyboardPress`로 적었는데 **쓸 수 없는
+> 이름이었다.** 키보드 계열 프리셋 중 최상위에 있는 건 `keyboardMechanical`과
+> `keyboardMembrane` 둘뿐이고, `keyboardPress`/`keyboardRelease`/`keyboardTap`은
+> `Presets.System.Android.*` 아래에 있다 — `presets.ts`가 `PresetName`에서
+> 의도적으로 제외한 플랫폼 시스템 햅틱이며, 안드로이드 전용이라 §0의 크로스
+> 플랫폼 기준에도 맞지 않는다. 적축은 최상위 151개 중 `plunk`으로 대체했다.
+
+`PresetName`은 `Presets`의 **최상위 함수 151개**만 통과시킨다(`Presets.System.*`
+제외). 오타든 시스템 햅틱이든 컴파일 타임에 걸린다 — 햅틱이 제품인 앱에서 무음
+실패가 가장 나쁜 실패 모드이므로 이 게이트가 실제로 일한 사례다.
 
 > ⚠️ **이 프리셋 3개는 미검증이다.** §10은 코드를 짜기 전에 Pulsar Live Preview에서
 > 실제로 느껴보고 고르라고 지시하지만 그건 실기기 작업이다. `registry.ts`가
