@@ -5,8 +5,12 @@
   "scripts": {
     "dev": "expo start --dev-client",
     "dev:clear": "expo start --dev-client -c",
+    "ios:sim": "expo run:ios",
+    "android:emu": "expo run:android",
     "ios": "expo run:ios --device",
     "android": "expo run:android --device",
+    "ios:release": "expo run:ios --device --configuration Release --no-bundler",
+    "android:release": "expo run:android --device --variant release --no-bundler",
     "prebuild": "expo prebuild",
     "prebuild:clean": "expo prebuild --clean",
     "typecheck": "tsc --noEmit",
