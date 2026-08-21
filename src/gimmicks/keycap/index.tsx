@@ -226,7 +226,7 @@ function KeycapBody({ pressed, palettes, stops, activeIndex }: BodyProps) {
   }));
 
   return (
-    <View style={BODY}>
+    <View style={BODY} collapsable={false}>
       <Canvas style={CANVAS}>
         <Rect x={0} y={0} width={SIZE} height={SIZE}>
           <LinearGradient start={vec(0, 0)} end={vec(0, SIZE)} colors={backgroundColors} />
@@ -267,7 +267,20 @@ const CONTAINER: ViewStyle = {
   justifyContent: 'center',
 };
 
-/** 제스처를 받는 뷰. Canvas가 아니라 이 뷰가 터치를 받는다. */
+/**
+ * 제스처를 받는 뷰. Canvas가 아니라 이 뷰가 터치를 받는다.
+ *
+ * `collapsable={false}`가 붙어 있는 이유(JSX 쪽): 이 뷰는 스타일이
+ * width/height뿐이라 Fabric이 네이티브 뷰 계층에서 없앨 수 있다. 그러면
+ * GestureDetector가 엉뚱한 view tag에 붙어 탭이 안 먹는다.
+ *
+ * GestureDetector도 자식에게 같은 prop을 주입하려 하지만, `_kinds/discrete.tsx`가
+ * render-prop 구조라 그 자식이 `<View>`가 아니라 이 컴포넌트다 — 주입된 prop이
+ * 컴포넌트에서 멈추고 실제 뷰까지 내려오지 않는다. 그래서 여기서 직접 붙인다.
+ *
+ * 클리커는 `backgroundColor`가 있어서 flatten 대상이 아니라 우연히 무사했다.
+ * 앞으로 discrete 기믹을 추가할 때 루트가 스타일만 있는 뷰라면 같은 걸 붙여야 한다.
+ */
 const BODY: ViewStyle = {
   width: SIZE,
   height: SIZE,
