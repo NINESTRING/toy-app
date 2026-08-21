@@ -42,10 +42,11 @@ const config: ExpoConfig = {
   userInterfaceStyle: 'automatic',
 
   /**
-   * Pulsar는 TurboModule(codegen)이라 새 아키텍처가 필요하다.
-   * SDK 57 기본값이지만 의존성 요구사항이므로 명시해 둔다.
+   * 참고: `newArchEnabled` 플래그는 여기 없다. SDK 57에서는 새 아키텍처가
+   * 유일한 모드가 되어 Expo 설정 스키마에서 아예 제거됐다. Pulsar가
+   * TurboModule(codegen)이라 새 아키텍처를 요구하는데, 그 조건은 SDK 57을
+   * 쓰는 것만으로 무조건 충족된다.
    */
-  newArchEnabled: true,
 
   ios: {
     bundleIdentifier: BUNDLE_ID,
