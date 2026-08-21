@@ -9,6 +9,7 @@ import {
   rect,
   rrect,
   vec,
+  type SkSize,
 } from '@shopify/react-native-skia';
 import * as React from 'react';
 import { View, type TextStyle, type ViewStyle } from 'react-native';
@@ -42,8 +43,14 @@ import { paletteFor, type KeycapPalette } from './palette';
  * "그리기" 용도에 해당한다.
  */
 
-/** 캔버스 한 변. 다이얼(260)보다 크게 잡아 그림자가 잘리지 않게 한다. */
-const SIZE = 300;
+/**
+ * 설계 좌표계 한 변.
+ *
+ * 캔버스는 화면을 가득 채우지만 키캡 자체의 좌표는 이 300pt 상자 기준으로
+ * 적는다. 실제 배치는 센터링 transform 하나가 처리하므로, 화면 크기가
+ * 달라져도 아래 상수들은 손댈 필요가 없다.
+ */
+const DESIGN = 300;
 
 /** 키캡이 박힌 하우징. */
 const HOUSING = { x: 74, y: 74, size: 152, radius: 20 };
@@ -60,10 +67,22 @@ const CAP_TOP = { x: 96, y: 86, width: 108, height: 104, radius: 10 };
 /** 눌렸을 때 내려가는 거리(px). */
 const PRESS_DEPTH = 7;
 
-/** 그림자. 레퍼런스처럼 왼쪽 아래로 떨어지므로 dx가 음수다. */
+/**
+ * 그림자는 두 개다.
+ *
+ * 하우징 그림자가 레퍼런스의 그것 — 키캡 뭉치 전체가 배경 위로 드리우는
+ * 큰 그림자다. 왼쪽 아래로 떨어지므로 dx가 음수다. 하우징은 눌려도 움직이지
+ * 않으니 이 그림자도 고정이다.
+ *
+ * 캡 그림자는 우물 안쪽에 떨어지는 작은 그림자다. 하우징이 거의 검정이라
+ * 적축에선 잘 안 보이지만, 상판이 밝은 사일런트에선 캡이 떠 있는 느낌을
+ * 만든다. 이쪽만 눌림에 따라 짧아진다.
+ */
 const SHADOW_DX = -14;
-const SHADOW_DY = 18;
-const SHADOW_BLUR = 20;
+const HOUSING_SHADOW_DY = 20;
+const HOUSING_SHADOW_BLUR = 24;
+const CAP_SHADOW_DY = 10;
+const CAP_SHADOW_BLUR = 12;
 const SHADOW_COLOR = 'rgba(0, 0, 0, 0.42)';
 
 /**
@@ -77,6 +96,11 @@ const RELEASE_MS = 90;
 const BACKGROUND_FADE_MS = 220;
 
 /** Skia에 넘길 도형은 미리 만들어둔다 — 워크릿에서 Skia 객체를 만들지 않는다. */
+const HOUSING_BOX = rrect(
+  rect(HOUSING.x, HOUSING.y, HOUSING.size, HOUSING.size),
+  HOUSING.radius,
+  HOUSING.radius
+);
 const SKIRT_BOX = rrect(rect(SKIRT.x, SKIRT.y, SKIRT.size, SKIRT.size), SKIRT.radius, SKIRT.radius);
 
 export default function Keycap({ gimmick, variant, onInteract }: GimmickScreenProps<'discrete'>) {
@@ -139,6 +163,25 @@ type BodyProps = {
 };
 
 function KeycapBody({ pressed, palettes, stops, activeIndex }: BodyProps) {
+  /**
+   * 캔버스 실측 크기. 배경이 화면을 가득 채워야 하므로 필요하다.
+   *
+   * Skia의 `onSize`는 SharedValue를 직접 채워주므로 JS 스레드를 거치지 않고
+   * 워크릿에서 바로 읽는다.
+   */
+  const canvasSize = useSharedValue<SkSize>({ width: 0, height: 0 });
+
+  const backgroundWidth = useDerivedValue(() => canvasSize.value.width);
+  const backgroundHeight = useDerivedValue(() => canvasSize.value.height);
+  /** 그라디언트는 화면 높이 전체에 걸린다. */
+  const gradientEnd = useDerivedValue(() => ({ x: 0, y: canvasSize.value.height }));
+
+  /** 설계 좌표계(300pt 상자)를 캔버스 가운데로 옮긴다. */
+  const centerTransform = useDerivedValue(() => [
+    { translateX: (canvasSize.value.width - DESIGN) / 2 },
+    { translateY: (canvasSize.value.height - DESIGN) / 2 },
+  ]);
+
   /**
    * 눌린 깊이(px). `pressed`를 그대로 쓰지 않고 한 겹 두는 이유는 누를 때와
    * 뗄 때의 시간이 달라야 하기 때문이다 — 누를 때 즉시, 뗄 때 90ms. (§0)
@@ -208,8 +251,8 @@ function KeycapBody({ pressed, palettes, stops, activeIndex }: BodyProps) {
    * 그림자는 Box의 자식이라 키캡과 함께 내려간다. 내려간 만큼 dy를 줄여
    * 바닥에 붙어 있게 만든다 — 결과적으로 키캡이 자기 그림자에 가까워진다.
    */
-  const shadowDy = useDerivedValue(() => SHADOW_DY - depth.value);
-  const shadowBlur = useDerivedValue(() => SHADOW_BLUR - depth.value * 0.8);
+  const capShadowDy = useDerivedValue(() => CAP_SHADOW_DY - depth.value);
+  const capShadowBlur = useDerivedValue(() => CAP_SHADOW_BLUR - depth.value * 0.6);
 
   /**
    * 라벨은 상판에 붙어 있어야 하므로 같은 깊이로 내린다. 색도 축에 따라
@@ -227,52 +270,70 @@ function KeycapBody({ pressed, palettes, stops, activeIndex }: BodyProps) {
 
   return (
     <View style={BODY} collapsable={false}>
-      <Canvas style={CANVAS}>
-        <Rect x={0} y={0} width={SIZE} height={SIZE}>
-          <LinearGradient start={vec(0, 0)} end={vec(0, SIZE)} colors={backgroundColors} />
+      <Canvas style={CANVAS} onSize={canvasSize}>
+        {/* 배경은 캔버스 전체 — 즉 화면 전체를 덮는다. */}
+        <Rect x={0} y={0} width={backgroundWidth} height={backgroundHeight}>
+          <LinearGradient start={vec(0, 0)} end={gradientEnd} colors={backgroundColors} />
         </Rect>
 
-        <RoundedRect
-          x={HOUSING.x}
-          y={HOUSING.y}
-          width={HOUSING.size}
-          height={HOUSING.size}
-          r={HOUSING.radius}
-          color={housingColor}
-        />
-
-        <Group transform={capTransform}>
-          <Box box={SKIRT_BOX} color={skirtColor}>
-            <BoxShadow dx={SHADOW_DX} dy={shadowDy} blur={shadowBlur} color={SHADOW_COLOR} />
+        <Group transform={centerTransform}>
+          {/* 하우징이 배경 위로 그림자를 드리운다. 레퍼런스의 그 그림자다. */}
+          <Box box={HOUSING_BOX} color={housingColor}>
+            <BoxShadow
+              dx={SHADOW_DX}
+              dy={HOUSING_SHADOW_DY}
+              blur={HOUSING_SHADOW_BLUR}
+              color={SHADOW_COLOR}
+            />
           </Box>
-          <RoundedRect
-            x={CAP_TOP.x}
-            y={CAP_TOP.y}
-            width={CAP_TOP.width}
-            height={CAP_TOP.height}
-            r={CAP_TOP.radius}
-            color={capTopColor}
-          />
+
+          <Group transform={capTransform}>
+            <Box box={SKIRT_BOX} color={skirtColor}>
+              <BoxShadow
+                dx={SHADOW_DX}
+                dy={capShadowDy}
+                blur={capShadowBlur}
+                color={SHADOW_COLOR}
+              />
+            </Box>
+            <RoundedRect
+              x={CAP_TOP.x}
+              y={CAP_TOP.y}
+              width={CAP_TOP.width}
+              height={CAP_TOP.height}
+              r={CAP_TOP.radius}
+              color={capTopColor}
+            />
+          </Group>
         </Group>
       </Canvas>
 
-      {/* 캔버스 위에 얹는 라벨. Skia 텍스트는 폰트 에셋을 요구하므로 피한다. */}
-      <Animated.Text style={[LABEL, labelStyle]}>Esc</Animated.Text>
+      {/*
+        라벨만 RN 쪽이다. Skia 텍스트는 폰트 에셋을 요구하므로 피한다.
+        설계 상자와 같은 크기의 뷰를 BODY가 가운데 정렬해주므로, 라벨 좌표를
+        캔버스의 센터링 transform과 따로 계산할 필요가 없다.
+      */}
+      <View style={DESIGN_BOX} pointerEvents="none">
+        <Animated.Text style={[LABEL, labelStyle]}>Esc</Animated.Text>
+      </View>
     </View>
   );
 }
 
+/** 셸이 기믹에 콘텐츠 영역 전체를 준다. 배경이 화면을 채우려면 다 받아야 한다. */
 const CONTAINER: ViewStyle = {
-  alignItems: 'center',
-  justifyContent: 'center',
+  flex: 1,
 };
 
 /**
  * 제스처를 받는 뷰. Canvas가 아니라 이 뷰가 터치를 받는다.
  *
- * `collapsable={false}`가 붙어 있는 이유(JSX 쪽): 이 뷰는 스타일이
- * width/height뿐이라 Fabric이 네이티브 뷰 계층에서 없앨 수 있다. 그러면
- * GestureDetector가 엉뚱한 view tag에 붙어 탭이 안 먹는다.
+ * 화면 전체이므로 배경 아무 데나 눌러도 딸깍한다 — 피젯 토이에선 타깃이
+ * 큰 게 이득이다.
+ *
+ * `collapsable={false}`가 붙어 있는 이유(JSX 쪽): 이 뷰는 스타일이 레이아웃뿐이라
+ * Fabric이 네이티브 뷰 계층에서 없앨 수 있다. 그러면 GestureDetector가 엉뚱한
+ * view tag에 붙어 탭이 안 먹는다.
  *
  * GestureDetector도 자식에게 같은 prop을 주입하려 하지만, `_kinds/discrete.tsx`가
  * render-prop 구조라 그 자식이 `<View>`가 아니라 이 컴포넌트다 — 주입된 prop이
@@ -282,24 +343,32 @@ const CONTAINER: ViewStyle = {
  * 앞으로 discrete 기믹을 추가할 때 루트가 스타일만 있는 뷰라면 같은 걸 붙여야 한다.
  */
 const BODY: ViewStyle = {
-  width: SIZE,
-  height: SIZE,
+  flex: 1,
+  alignItems: 'center',
+  justifyContent: 'center',
 };
 
+/** 캔버스는 BODY 전체를 덮는다. 배경이 화면을 채우는 곳이 여기다. */
 const CANVAS: ViewStyle = {
   position: 'absolute',
   left: 0,
+  right: 0,
   top: 0,
-  width: SIZE,
-  height: SIZE,
+  bottom: 0,
+};
+
+/**
+ * 설계 좌표계와 같은 크기의 상자. BODY가 가운데 정렬해주므로 캔버스의
+ * 센터링 transform과 자동으로 맞는다. 라벨 좌표를 두 번 계산하지 않기 위한 것.
+ */
+const DESIGN_BOX: ViewStyle = {
+  width: DESIGN,
+  height: DESIGN,
 };
 
 /**
  * 상판 중심(y ≈ 138)에 글자 중심을 맞춘 값. 상판 기하가 바뀌면 여기도 같이
- * 옮겨야 한다.
- *
- * `pointerEvents`를 스타일에 두는 이유: 라벨이 상판을 덮고 있어서 탭이
- * 라벨에 먹히면 딸깍이 안 난다.
+ * 옮겨야 한다. 좌표는 위 설계 상자 기준이다.
  */
 const LABEL: TextStyle = {
   position: 'absolute',
@@ -310,5 +379,4 @@ const LABEL: TextStyle = {
   fontSize: 22,
   fontWeight: '600',
   letterSpacing: 0.5,
-  pointerEvents: 'none',
 };

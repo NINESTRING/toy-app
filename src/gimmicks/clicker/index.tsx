@@ -43,7 +43,9 @@ function ClickerBody({ pressed }: { pressed: SharedValue<number> }) {
   );
 }
 
+/** 셸이 기믹에 콘텐츠 영역 전체를 준다. 채우고 가운데 정렬한다. */
 const CONTAINER: ViewStyle = {
+  flex: 1,
   alignItems: 'center',
   justifyContent: 'center',
 };

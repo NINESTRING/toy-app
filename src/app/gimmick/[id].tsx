@@ -124,35 +124,70 @@ function GimmickView({ gimmick }: { gimmick: Gimmick }) {
           ),
         }}
       />
-      <View className="flex-1 items-center justify-center gap-8 p-4">
-        {capability.needsFallback ? <HapticFallbackNotice /> : null}
+      {/*
+        기믹이 콘텐츠 영역 전체를 차지하고 셸 크롬이 그 위에 뜬다.
 
-        <React.Suspense fallback={<ActivityIndicator />}>
+        키캡처럼 배경을 소유하는 기믹이 화면을 가득 채울 수 있어야 하기 때문이다.
+        기믹마다 플래그를 두는 대신 모든 기믹에 같은 모델을 적용한다 — 클리커·
+        다이얼은 컨테이너가 `flex: 1`로 가운데 정렬하므로 보이는 결과가 같다.
+      */}
+      <View className="flex-1">
+        <React.Suspense fallback={<LoadingBody />}>
           <Body gimmick={gimmick} variant={variant} onInteract={onInteract} />
         </React.Suspense>
 
         {/*
-          축 칩. 셸에 있으므로 `className`을 쓴다 — §1이 금지한 건 기믹 화면
-          내부이고, 여기는 매 프레임 스타일이 바뀌는 구간이 아니다. 변형이
-          2개 이상일 때만 나타나므로 클리커·다이얼 화면은 그대로다.
+          `box-none`이라 이 레이어 자체는 터치를 먹지 않는다. 버튼만 자기 몫을
+          가져가고 나머지는 아래 기믹으로 통과한다 — 배경 아무 데나 눌러도
+          딸깍하는 게 피젯 토이에 맞다.
         */}
-        {variants.length > 1 ? (
-          <View className="flex-row gap-2">
-            {variants.map((candidate) => (
-              <Button
-                key={candidate.id}
-                size="sm"
-                variant={candidate.id === variant.id ? 'default' : 'outline'}
-                onPressIn={() => setVariant(gimmick.id, candidate.id)}>
-                <Text>{candidate.name}</Text>
-              </Button>
-            ))}
+        <View pointerEvents="box-none" className="absolute inset-0 justify-between p-4">
+          <View pointerEvents="box-none">
+            {capability.needsFallback ? <HapticFallbackNotice /> : null}
           </View>
-        ) : null}
 
-        <Text className="text-muted-foreground font-mono text-sm">{count.toLocaleString()}</Text>
+          <View pointerEvents="box-none" className="items-center gap-3">
+            {/*
+              축 칩. 셸에 있으므로 `className`을 쓴다 — §1이 금지한 건 기믹 화면
+              내부이고, 여기는 매 프레임 스타일이 바뀌는 구간이 아니다. 변형이
+              2개 이상일 때만 나타나므로 클리커·다이얼 화면은 그대로다.
+            */}
+            {variants.length > 1 ? (
+              <View className="flex-row gap-2">
+                {variants.map((candidate) => (
+                  <Button
+                    key={candidate.id}
+                    size="sm"
+                    variant={candidate.id === variant.id ? 'default' : 'outline'}
+                    onPressIn={() => setVariant(gimmick.id, candidate.id)}>
+                    <Text>{candidate.name}</Text>
+                  </Button>
+                ))}
+              </View>
+            ) : null}
+
+            {/*
+              기믹 배경 위에 얹히므로 알약 배경을 준다. 키캡의 파란 배경에
+              회색 글씨만 있으면 안 읽힌다.
+            */}
+            <Text
+              pointerEvents="none"
+              className="text-muted-foreground bg-muted rounded-full px-2.5 py-1 font-mono text-sm">
+              {count.toLocaleString()}
+            </Text>
+          </View>
+        </View>
       </View>
     </>
+  );
+}
+
+/** 기믹이 로드되는 동안. 기믹과 같은 자리를 차지해야 레이아웃이 튀지 않는다. */
+function LoadingBody() {
+  return (
+    <View className="flex-1 items-center justify-center">
+      <ActivityIndicator />
+    </View>
   );
 }
 
