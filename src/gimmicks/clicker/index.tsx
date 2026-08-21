@@ -12,10 +12,10 @@ import type { GimmickScreenProps } from '@/gimmicks/types';
  * 바뀌는 구간이라 Tailwind가 낄 자리가 없다. RNR과 Uniwind는 갤러리·설정
  * 화면까지만.
  */
-export default function Clicker({ gimmick, onInteract }: GimmickScreenProps<'discrete'>) {
+export default function Clicker({ gimmick, variant, onInteract }: GimmickScreenProps<'discrete'>) {
   return (
     <View style={CONTAINER}>
-      <DiscreteGimmick haptic={gimmick.haptic} config={gimmick.config} onInteract={onInteract}>
+      <DiscreteGimmick haptic={variant.haptic} config={gimmick.config} onInteract={onInteract}>
         {({ pressed }) => <ClickerBody pressed={pressed} />}
       </DiscreteGimmick>
     </View>

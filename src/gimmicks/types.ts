@@ -107,12 +107,48 @@ export type GimmickKind = keyof KindSpec;
 export type PlannedGimmickKind = GimmickKind | 'grid' | 'physics';
 
 // ---------------------------------------------------------------------------
+// 변형
+// ---------------------------------------------------------------------------
+
+/**
+ * 하나의 기믹이 갖는 손맛 변형.
+ *
+ * 키캡의 스위치 축(적축·갈축·사일런트)처럼 "같은 물건인데 손맛이 다른" 것을
+ * 표현한다. 키캡은 클리커와 같은 discrete 모델이라 껍데기만 바꾸면 갤러리에
+ * 사실상 같은 기믹이 둘 서게 되는데, 차별점을 손맛에 두는 게 §0("햅틱이 곧
+ * 제품")에 맞는 답이다.
+ *
+ * 햅틱 타입을 파라미터로 받으므로 kind별 제약이 그대로 유지된다 — detented
+ * 기믹에 variants를 달면 RealtimeHaptic만 들어간다.
+ *
+ * 색이나 사운드는 여기 넣지 않는다. §4 원칙 1이 데이터로 규정한 건 햅틱이고,
+ * 시각 정보는 기믹 컴포넌트가 자기 것으로 갖는다(클리커가 자기 색을
+ * 컴포넌트에 갖고 있는 것과 같은 자리다).
+ */
+export type GimmickVariant<H> = {
+  id: string;
+  name: string;
+  haptic: H;
+};
+
+/** kind에 맞는 변형 타입. 기믹 컴포넌트가 props로 받는다. */
+export type VariantOf<K extends GimmickKind> = GimmickVariant<KindSpec[K]['haptic']>;
+
+// ---------------------------------------------------------------------------
 // 기믹
 // ---------------------------------------------------------------------------
 
 /** 기믹 화면 컴포넌트가 받는 props. */
 export type GimmickScreenProps<K extends GimmickKind = GimmickKind> = {
   gimmick: Extract<Gimmick, { kind: K }>;
+  /**
+   * 선택된 변형. 기믹 컴포넌트는 `gimmick.haptic`이 아니라 이쪽을 쓴다 —
+   * 진실의 출처를 둘로 만들지 않기 위해서다.
+   *
+   * `variants`가 없는 기믹에는 셸이 `gimmick.haptic`으로 단일 변형을 합성해
+   * 넘기므로, 변형 개념을 모르는 기믹도 그대로 동작한다.
+   */
+  variant: VariantOf<K>;
   /**
    * 한 번 조작될 때마다(딸깍 1회, 눈금 1칸) 호출된다.
    * 카운트를 메모리에 쌓는 용도 — MMKV 저장은 store 쪽에서 디바운스한다. (§5)
@@ -141,7 +177,13 @@ type LazyComponent<K extends GimmickKind> = () => Promise<{
 export type Gimmick = {
   [K in GimmickKind]: GimmickBase & {
     kind: K;
+    /**
+     * 기본 변형의 햅틱. `variants`가 있으면 그 첫 항목과 같은 값을 둔다 —
+     * 저장된 축을 못 찾았을 때 셸이 여기로 떨어진다.
+     */
     haptic: KindSpec[K]['haptic'];
+    /** 손맛 변형. 2개 이상일 때만 셸이 선택 UI를 그린다. */
+    variants?: readonly VariantOf<K>[];
     config: KindSpec[K]['config'];
     component: LazyComponent<K>;
   };

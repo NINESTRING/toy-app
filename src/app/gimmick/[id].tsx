@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { findGimmick } from '@/gimmicks/registry';
-import type { Gimmick } from '@/gimmicks/types';
+import type { Gimmick, GimmickVariant, HapticSpec } from '@/gimmicks/types';
 import { stopHaptics } from '@/haptics/engine';
 import { useHapticCapability } from '@/haptics/useHapticCapability';
 import { useGimmickCount, useGimmickStore } from '@/store/gimmickState';
@@ -44,12 +44,40 @@ export default function GimmickScreen() {
   return <GimmickView gimmick={gimmick} />;
 }
 
+/** `variants`가 없는 기믹의 합성 변형에 쓰는 id. */
+const DEFAULT_VARIANT_ID = 'default';
+
+/**
+ * 기믹의 변형 목록. 없으면 `haptic` 하나로 단일 변형을 합성한다.
+ *
+ * 이렇게 해두면 기믹 컴포넌트가 분기 없이 항상 `variant.haptic`만 보게 되고,
+ * 변형 개념을 모르는 기존 기믹(클리커·다이얼)도 그대로 동작한다.
+ */
+function variantsOf(gimmick: Gimmick): readonly GimmickVariant<HapticSpec>[] {
+  /**
+   * 유니온 배열에 직접 접근하면 TS가 시그니처를 합치지 못하므로 한 번 넓혀
+   * 받는다. 속성 타입은 공변이라 대입이 성립한다.
+   */
+  const variants: readonly GimmickVariant<HapticSpec>[] = gimmick.variants ?? [];
+  if (variants.length > 0) {
+    return variants;
+  }
+  return [{ id: DEFAULT_VARIANT_ID, name: gimmick.name, haptic: gimmick.haptic }];
+}
+
 function GimmickView({ gimmick }: { gimmick: Gimmick }) {
   const hydrate = useGimmickStore((state) => state.hydrate);
   const interact = useGimmickStore((state) => state.interact);
   const reset = useGimmickStore((state) => state.reset);
   const count = useGimmickCount(gimmick.id);
   const capability = useHapticCapability();
+
+  /**
+   * 지금은 항상 기본 변형이다. 사용자 선택은 다음 태스크에서 붙는다 —
+   * 이 단계의 목표는 햅틱을 읽는 경로를 옮기는 것뿐이다.
+   */
+  const variants = React.useMemo(() => variantsOf(gimmick), [gimmick]);
+  const variant = variants[0];
 
   React.useEffect(() => {
     hydrate(gimmick.id);
@@ -95,7 +123,7 @@ function GimmickView({ gimmick }: { gimmick: Gimmick }) {
         {capability.needsFallback ? <HapticFallbackNotice /> : null}
 
         <React.Suspense fallback={<ActivityIndicator />}>
-          <Body gimmick={gimmick} onInteract={onInteract} />
+          <Body gimmick={gimmick} variant={variant} onInteract={onInteract} />
         </React.Suspense>
 
         <Text className="text-muted-foreground font-mono text-sm">{count.toLocaleString()}</Text>
@@ -106,6 +134,7 @@ function GimmickView({ gimmick }: { gimmick: Gimmick }) {
 
 type GimmickBodyComponent = React.ComponentType<{
   gimmick: Gimmick;
+  variant: GimmickVariant<HapticSpec>;
   onInteract: () => void;
 }>;
 
