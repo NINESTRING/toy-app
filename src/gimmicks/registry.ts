@@ -112,6 +112,30 @@ export const GIMMICKS = [
     },
     component: () => import('./dial'),
   },
+  {
+    id: 'bulb',
+    name: '전구',
+    kind: 'tug',
+    /**
+     * 풀코드가 임계값을 넘는 순간의 딸깍. 실제 풀체인 스위치의 묵직한
+     * 걸쇠 느낌을 노리고 `latch`를 골랐다.
+     *
+     * ⚠️ 미검증 값이다. 클리커·키캡·다이얼과 같은 상태 — §10의 Live
+     * Preview 절차는 실기기가 필요하다. 후보:
+     *   latch, lock, snap, trigger, toggleOn/toggleOff(켜짐·꺼짐 분리 —
+     *   config 확장이 필요해서 후속으로 미뤘다, 스펙 §7)
+     */
+    haptic: { type: 'preset', name: 'latch' },
+    config: {
+      /**
+       * 토글로 인정하는 당김 거리(pt). 레퍼런스는 50px — 손가락 기준으로
+       * 살짝 여유를 줬다. 너무 짧으면 스치기만 해도 켜져서 "당겼다"는
+       * 느낌이 죽는다.
+       */
+      threshold: 60,
+    },
+    component: () => import('./bulb'),
+  },
 ] as const satisfies readonly Gimmick[];
 
 /** id로 기믹 찾기. 라우트 파라미터가 문자열로 오므로 검증 겸용. */

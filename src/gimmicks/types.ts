@@ -63,6 +63,17 @@ export type DiscreteConfig = {
   releaseHaptic?: PresetHaptic | PatternHaptic;
 };
 
+/**
+ * Tug — 전구 풀코드, 레버, 파티 팝퍼. 당김이 임계값을 넘는 순간 1회. (§4)
+ *
+ * discrete와 다른 점은 트리거가 터치 다운이 아니라 **드래그 거리**라는 것.
+ * 놓아야 재장전되므로 한 번의 당김 사이클에 토글은 1회다.
+ */
+export type TugConfig = {
+  /** 토글로 인정하는 당김 거리(pt). 휴지점 기준 유클리드 거리, 방향 무관. */
+  threshold: number;
+};
+
 /** Detented — 다이얼, 슬라이더, 래칫. 눈금 넘을 때마다. (§4) */
 export type DetentedConfig = {
   /** `sweepDegrees` 구간을 몇 눈금으로 나눌지. */
@@ -79,9 +90,8 @@ export type DetentedConfig = {
 /**
  * 구현된 입력 모델 → 설정 타입.
  *
- * §4는 입력 모델 4종(discrete / detented / grid / physics)을 정의하지만,
- * 첫 스프린트는 구조적으로 가장 먼 두 개만 만든다(§10). grid / physics를
- * 추가할 때 할 일:
+ * §4가 정의한 입력 모델(discrete / detented / tug / grid / physics) 중
+ * grid / physics는 아직 없다. 추가할 때 할 일:
  *   1. 여기에 `grid: { config: GridConfig; haptic: ... }` 한 줄 추가
  *   2. `_kinds/grid.tsx`에 렌더러 추가
  *   3. `KIND_RENDERERS`에 매핑 추가
@@ -97,6 +107,11 @@ type KindSpec = {
     config: DetentedConfig;
     /** 눈금마다 속도에 따라 세기가 변해야 하므로 실시간 변조 전용. */
     haptic: RealtimeHaptic;
+  };
+  tug: {
+    config: TugConfig;
+    /** 임계값 통과 순간 한 방 — discrete와 같은 단발 계열. */
+    haptic: PresetHaptic | PatternHaptic;
   };
 };
 
