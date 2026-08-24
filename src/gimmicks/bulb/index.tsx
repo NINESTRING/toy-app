@@ -94,18 +94,16 @@ const GLOW_COLOR = '#ffd97a';
 const CAP_RIDGE_COLOR = 'rgba(0, 0, 0, 0.25)';
 
 /** 정적인 도형은 키캡처럼 미리 만든다 — 워크릿에서 만드는 건 줄뿐이다. */
-const FILAMENT_PATH = Skia.Path.Make();
-FILAMENT_PATH.moveTo(140, 182);
-FILAMENT_PATH.lineTo(130, 142);
-FILAMENT_PATH.moveTo(160, 182);
-FILAMENT_PATH.lineTo(170, 142);
+const FILAMENT_PATH = Skia.PathBuilder.Make()
+  .moveTo(140, 182)
+  .lineTo(130, 142)
+  .moveTo(160, 182)
+  .lineTo(170, 142)
+  .detach();
 
-const SHINE_PATH = Skia.Path.Make();
-SHINE_PATH.addArc(
-  { x: GLASS.x - 44, y: GLASS.y - 44, width: 88, height: 88 },
-  190,
-  55
-);
+const SHINE_PATH = Skia.PathBuilder.Make()
+  .addArc({ x: GLASS.x - 44, y: GLASS.y - 44, width: 88, height: 88 }, 190, 55)
+  .detach();
 
 export default function Bulb({ gimmick, variant, onInteract }: GimmickScreenProps<'tug'>) {
   return (
@@ -184,10 +182,10 @@ function BulbBody({ dragX, dragY, on }: BodyProps) {
     const endY = CORD_REST.y + dragY.value;
     const controlX = (CORD_ANCHOR.x + endX) / 2 - dragX.value * CORD_BEND;
     const controlY = (CORD_ANCHOR.y + endY) / 2 - dragY.value * CORD_BEND;
-    const path = Skia.Path.Make();
-    path.moveTo(CORD_ANCHOR.x, CORD_ANCHOR.y);
-    path.quadTo(controlX, controlY, endX, endY);
-    return path;
+    return Skia.PathBuilder.Make()
+      .moveTo(CORD_ANCHOR.x, CORD_ANCHOR.y)
+      .quadTo(controlX, controlY, endX, endY)
+      .detach();
   });
 
   const knotX = useDerivedValue(() => CORD_REST.x + dragX.value);
