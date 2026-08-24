@@ -91,11 +91,15 @@ export function TugGimmick({ haptic, config, onInteract, children }: Props) {
           }
 
           /**
+           * 거리는 **잡은 지점 기준**이다(레퍼런스도 press 지점 기준).
+           * 휴지점 기준으로 재면 복귀 스프링 도중의 줄(이미 임계값 밖)을
+           * 다시 잡았을 때 1px만 움직여도 재토글되는 구멍이 생긴다.
+           *
            * 방향은 따지지 않는다 — 어느 쪽으로 당겨도 딸깍. 레퍼런스와
            * 같고, 피젯 토이에선 "되는 방향"을 외우게 하는 게 손해다.
            */
           const distance = Math.sqrt(
-            dragX.value * dragX.value + dragY.value * dragY.value
+            event.translationX * event.translationX + event.translationY * event.translationY
           );
           if (distance <= threshold) {
             return;

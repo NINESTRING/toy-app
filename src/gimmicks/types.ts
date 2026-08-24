@@ -70,7 +70,7 @@ export type DiscreteConfig = {
  * 놓아야 재장전되므로 한 번의 당김 사이클에 토글은 1회다.
  */
 export type TugConfig = {
-  /** 토글로 인정하는 당김 거리(pt). 휴지점 기준 유클리드 거리, 방향 무관. */
+  /** 토글로 인정하는 당김 거리(pt). 잡은 지점 기준 유클리드 거리, 방향 무관. */
   threshold: number;
 };
 
