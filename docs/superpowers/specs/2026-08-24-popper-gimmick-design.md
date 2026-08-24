@@ -123,17 +123,18 @@ registry 항목:
   haptic: {
     type: 'sling',
     charge: { minAmplitude: 0.1, maxAmplitude: 0.7, minFrequency: 0.2, maxFrequency: 0.6 },
-    fire: { type: 'preset', name: 'pop' },
+    fire: { type: 'preset', name: 'balloonPop' },
   },
   config: { maxPull: 160, minPower: 0.1, fanDegrees: 150 },
   component: () => import('./popper'),
 }
 ```
 
-> ⚠️ **`pop`과 charge 값 전부 미검증이다.** 키캡·다이얼·전구와 같은 상태 —
-> §10의 Live Preview 절차는 실기기 작업이다. fire 후보: `pop`, `boom`,
-> `burst`, `snap`. charge는 실기기에서 "당길수록 팽팽해진다"가 느껴질 때까지
-> 진폭·주파수 범위를 조정한다.
+> ⚠️ **`balloonPop`과 charge 값 전부 미검증이다.** 키캡·다이얼·전구와 같은
+> 상태 — §10의 Live Preview 절차는 실기기 작업이다. fire 후보: `balloonPop`,
+> `burst`, `firecracker`, `explosion`, `snap` (설치된 Pulsar에 `pop`·`boom`은
+> 없다 — `PresetName`이 컴파일 타임에 걸러준다). charge는 실기기에서
+> "당길수록 팽팽해진다"가 느껴질 때까지 진폭·주파수 범위를 조정한다.
 
 ---
 
@@ -269,7 +270,7 @@ export type SlingRenderState = {
 
 ## 11. 후속
 
-- [ ] 실기기에서 `pop` 확정 (후보: boom, burst, snap)
+- [ ] 실기기에서 `balloonPop` 확정 (후보: burst, firecracker, explosion, snap)
 - [ ] charge 진폭·주파수 범위 실기기 튜닝 ("팽팽해진다"가 느껴질 때까지)
 - [ ] 파티클 물리 상수(중력·저항·수명) 실기기 튜닝
 - [ ] Atlas 256개 60fps 확인 — 밀리면 풀 축소 또는 스프라이트 단순화
