@@ -18,7 +18,7 @@ import type { PresetName } from '@/haptics/presets';
  * 햅틱은 코드가 아니라 데이터다. 기믹 정의가 순수 데이터로 유지되면
  * 나중에 서버에서 내려받을 수 있다.
  */
-export type HapticSpec = PresetHaptic | PatternHaptic | RealtimeHaptic;
+export type HapticSpec = PresetHaptic | PatternHaptic | RealtimeHaptic | SlingHaptic;
 
 /** Pulsar 프리셋 이름. 151개면 웬만한 기믹은 커스텀 패턴 없이 커버된다. (§10) */
 export type PresetHaptic = {
@@ -88,6 +88,43 @@ export type DetentedConfig = {
 };
 
 /**
+ * Sling — 파티 포퍼, 새총. 당겨서 조준하고 놓는 순간 발사. (§4)
+ *
+ * tug와 다른 점: 트리거가 릴리스이고, 드래그가 각도·파워라는 연속
+ * payload를 만든다. tug는 당김 도중 임계값 통과가 트리거고 릴리스는
+ * 재장전일 뿐이다.
+ */
+export type SlingConfig = {
+  /** 파워 1.0에 도달하는 당김 거리(pt). */
+  maxPull: number;
+  /** 이 파워(0~1) 미만에서 놓으면 불발 — 탭이 오발되지 않는다. */
+  minPower: number;
+  /** 발사각 허용 부채꼴(도). 수직 위를 중심으로 ±(fanDegrees/2)로 클램프. */
+  fanDegrees: number;
+};
+
+/**
+ * 차징 럼블 + 발사 한 방. sling 전용 복합 햅틱.
+ *
+ * 당기는 동안은 연속 엔벨로프(`useRealtimeComposer`의 `set`)를 파워로
+ * 변조하고, 릴리스 순간 단발을 쏜다. 단발(트랜지언트)과 연속(엔벨로프)은
+ * 다른 채널이라 서로 충돌하지 않는다.
+ */
+export type SlingHaptic = {
+  type: 'sling';
+  /** 당기는 동안의 연속 엔벨로프. 파워 0→1로 보간한다. */
+  charge: {
+    minAmplitude: number;
+    maxAmplitude: number;
+    /** 파워가 차면 주파수도 올라간다 — 세지면서 날카로워지는 것. */
+    minFrequency: number;
+    maxFrequency: number;
+  };
+  /** 릴리스 순간 한 방. */
+  fire: PresetHaptic | PatternHaptic;
+};
+
+/**
  * 구현된 입력 모델 → 설정 타입.
  *
  * §4가 정의한 입력 모델(discrete / detented / tug / grid / physics) 중
@@ -112,6 +149,11 @@ type KindSpec = {
     config: TugConfig;
     /** 임계값 통과 순간 한 방 — discrete와 같은 단발 계열. */
     haptic: PresetHaptic | PatternHaptic;
+  };
+  sling: {
+    config: SlingConfig;
+    /** 차징(연속) + 발사(단발) 복합. 이 kind 전용 타입이다. */
+    haptic: SlingHaptic;
   };
 };
 
