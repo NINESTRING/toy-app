@@ -28,7 +28,8 @@ import { useHapticFire } from './useHapticFire';
  * 릴리스가 사이클을 끝내므로 "한 번의 당김에 토글 1회"는 구조적으로 보장된다.
  *
  * 기믹이 `canFire`를 주면 릴리스 순간 한 번 더 물어본다 — 임계값이 못 보는
- * 방향·자세를 기믹의 기하로 거부할 수 있다.
+ * 방향·자세를 기믹의 기하로 거부할 수 있다. `canGrab`은 같은 일을 반대쪽
+ * 끝에서 한다 — 터치 다운 지점이 손잡이 근처가 아니면 아예 안 잡힌다.
  *
  * 이 컴포넌트는 제스처·토글·복귀 스프링만 소유하고 생김새는 children에
  * 맡긴다. 모든 판정이 워크릿 안에서 끝난다. (§4)
@@ -57,6 +58,17 @@ type Props = {
    * 판정을 여기서 만들지 않고 받아 쓴다 — `_kinds`는 기믹의 도형을 모른다.
    */
   canFire?: (dragX: number, dragY: number) => boolean;
+  /**
+   * 이 터치로 손잡이를 **잡을 수 있는지** 판정하는 워크릿. 없으면 어디서든
+   * 잡힌다.
+   *
+   * `(x, y)`는 제스처 뷰 기준 터치 좌표(pt), `(dragX, dragY)`는 지금 변위다 —
+   * 복귀 스프링이 도는 중이면 손잡이가 휴지점에 없으므로 같이 넘긴다.
+   *
+   * `canFire`와 같은 이유로 여기서 만들지 않고 받아 쓴다: 손잡이가 화면
+   * 어디에 있는지는 기믹의 기하이고 `_kinds`는 그걸 모른다.
+   */
+  canGrab?: (x: number, y: number, dragX: number, dragY: number) => boolean;
   children: (state: TugRenderState) => React.ReactNode;
 };
 
@@ -71,7 +83,7 @@ type Props = {
  */
 const WHIP_SPRING = { damping: 12, stiffness: 300, mass: 1 };
 
-export function TugGimmick({ haptic, config, onInteract, canFire, children }: Props) {
+export function TugGimmick({ haptic, config, onInteract, canFire, canGrab, children }: Props) {
   const dragX = useSharedValue(0);
   const dragY = useSharedValue(0);
   const on = useSharedValue(0);
@@ -91,6 +103,11 @@ export function TugGimmick({ haptic, config, onInteract, canFire, children }: Pr
   /** 잡은 순간의 변위. 복귀 도중에 다시 잡아도 튀지 않게 하는 기점. */
   const grabX = useSharedValue(0);
   const grabY = useSharedValue(0);
+  /**
+   * 이번 터치가 손잡이를 잡았는지. 실패한 터치도 `onFinalize`까지 오므로
+   * 거기서 이걸 보고 지나쳐야 한다.
+   */
+  const grabbed = useSharedValue(false);
 
   const fireToggle = useThrottledHaptic(useHapticFire(haptic));
 
@@ -99,9 +116,36 @@ export function TugGimmick({ haptic, config, onInteract, canFire, children }: Pr
   const pan = React.useMemo(
     () =>
       Gesture.Pan()
-        /** 잡는 즉시 줄이 손가락을 따라야 하므로 발동 거리 0. */
-        .minDistance(0)
-        .onBegin(() => {
+        /**
+         * 수동 활성화. 두 가지를 동시에 얻는다:
+         *
+         * 1. 잡는 즉시 줄이 손가락을 따른다 — 터치 다운에서 바로 `activate()`를
+         *    부르므로 `minDistance(0)`과 같은 뜻이다.
+         * 2. `canGrab`이 거부한 터치를 **실패로 끝낼 수 있다.** 콜백 안에서
+         *    무시만 하면 제스처는 활성인 채로 그 터치를 삼켜서, 화면 어디를
+         *    눌러도 다른 제스처(가장자리 뒤로가기 스와이프 등)가 죽는다.
+         */
+        .manualActivation(true)
+        .onTouchesDown((event, manager) => {
+          'worklet';
+          /**
+           * 첫 손가락으로만 판정한다. 잡고 있는 중에 두 번째 손가락이 엉뚱한
+           * 데를 짚었다고 잡은 걸 놓치면 안 된다.
+           */
+          if (event.numberOfTouches > 1) {
+            return;
+          }
+          const touch = event.changedTouches[0];
+          grabbed.value =
+            canGrab === undefined || canGrab(touch.x, touch.y, dragX.value, dragY.value);
+          if (grabbed.value) {
+            manager.activate();
+          } else {
+            manager.fail();
+          }
+        })
+        /** 활성은 위에서만 나온다 — 즉 여기 온 건 잡힌 터치뿐이다. */
+        .onStart(() => {
           'worklet';
           active.value = true;
           /** 스프링 복귀 중이면 그 자리에서 낚아챈다. */
@@ -138,6 +182,15 @@ export function TugGimmick({ haptic, config, onInteract, canFire, children }: Pr
         })
         .onFinalize(() => {
           'worklet';
+          /**
+           * 실패한 터치(`canGrab` 거부)도 finalize까지 온다. 그건 사이클이
+           * 아니었으므로 복귀 스프링도 걸지 않고 그냥 지나간다 — 걸면 마침
+           * 돌아오던 줄의 애니메이션을 헛되이 다시 시작시킨다.
+           */
+          if (!grabbed.value) {
+            return;
+          }
+          grabbed.value = false;
           active.value = false;
 
           /**
@@ -161,7 +214,21 @@ export function TugGimmick({ haptic, config, onInteract, canFire, children }: Pr
           dragX.value = withSpring(0, WHIP_SPRING);
           dragY.value = withSpring(0, WHIP_SPRING);
         }),
-    [active, canFire, dragX, dragY, armed, fireToggle, grabX, grabY, on, onInteract, threshold]
+    [
+      active,
+      canFire,
+      canGrab,
+      dragX,
+      dragY,
+      armed,
+      fireToggle,
+      grabbed,
+      grabX,
+      grabY,
+      on,
+      onInteract,
+      threshold,
+    ]
   );
 
   return <GestureDetector gesture={pan}>{children({ dragX, dragY, on, active })}</GestureDetector>;

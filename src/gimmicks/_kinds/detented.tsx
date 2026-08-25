@@ -17,6 +17,10 @@ import type { DetentedConfig, RealtimeHaptic } from '@/gimmicks/types';
  * 진동 세기가 **각속도에 따라 달라야** 한다. 천천히 돌리면 약하게, 빨리
  * 돌리면 세게.
  *
+ * 세는 단위는 손맛의 단위와 분리돼 있다. 딸깍은 눈금마다 터지지만 카운트는
+ * `detentsPerCount` 눈금마다 1이다 — 다이얼은 한 바퀴(32눈금)에 1이라
+ * 카운터가 "몇 번 돌렸나"를 뜻하게 된다.
+ *
  * 모든 계산이 워크릿 안에서 끝난다. 드래그 중 "눈금 넘었나?"를 JS 스레드에서
  * 계산하면 확실히 밀린다. (§4)
  */
@@ -52,8 +56,21 @@ export function DetentedGimmick({ haptic, config, onInteract, children }: Props)
   const lastFiredAt = useSharedValue(0);
   /** 뷰 중심. 손가락 좌표를 각도로 바꿀 때 기준점. */
   const center = useSharedValue({ x: 0, y: 0 });
+  /**
+   * 다음 카운트까지의 **부호 있는** 눈금 누적. `detentsPerCount`에 닿으면
+   * 1 올리고 그만큼 덜어낸다.
+   *
+   * 절대 이동량을 쌓지 않는 게 핵심이다. 다이얼은 한 바퀴에 1인데, 절대값을
+   * 쌓으면 반 바퀴씩 앞뒤로 흔들기만 해도 카운트가 오른다. 부호가 있으면
+   * 왕복은 서로 상쇄되어 제자리다 — "한 바퀴 돌렸을 때"가 곧이곧대로 지켜진다.
+   *
+   * 올린 뒤 0으로 리셋하지 않고 `detentsPerCount`만큼 **덜어내는** 것도
+   * 이유가 있다. 경계에 걸터앉아 한 눈금씩 왕복하면 리셋 방식에선 넘나들
+   * 때마다 1씩 오른다. 덜어내면 다음 발화까지 다시 한 바퀴가 필요하다.
+   */
+  const countProgress = useSharedValue(0);
 
-  const { detentCount, sweepDegrees, clamp } = config;
+  const { detentCount, sweepDegrees, clamp, detentsPerCount = 1 } = config;
   const { minAmplitude, maxAmplitude, frequency, velocityForMaxAmplitude } = haptic;
 
   /** 눈금 하나의 각도 폭. */
@@ -106,7 +123,23 @@ export function DetentedGimmick({ haptic, config, onInteract, children }: Props)
           if (nextDetent === detent.value) {
             return;
           }
+          const stepped = nextDetent - detent.value;
           detent.value = nextDetent;
+
+          /**
+           * 카운트는 햅틱 **스로틀 위**에 있다. 아래로 내리면 빨리 돌릴 때
+           * 버려진 딸깍만큼 카운트도 같이 새서, 실제로 돌린 양보다 적게 센다.
+           * 눈금 인덱스는 스로틀과 무관하게 항상 갱신되므로 여기서 세는 게 맞다.
+           */
+          countProgress.value += stepped;
+          while (countProgress.value >= detentsPerCount) {
+            countProgress.value -= detentsPerCount;
+            runOnJS(onInteract)();
+          }
+          while (countProgress.value <= -detentsPerCount) {
+            countProgress.value += detentsPerCount;
+            runOnJS(onInteract)();
+          }
 
           // §5: 초당 20회 넘게 쏘면 시스템이 드랍한다. 우리가 먼저 버린다.
           if (now - lastFiredAt.value < HAPTIC_THROTTLE_MS) {
@@ -127,8 +160,6 @@ export function DetentedGimmick({ haptic, config, onInteract, children }: Props)
           const speedRatio = Math.min(1, velocity / velocityForMaxAmplitude);
           const amplitude = minAmplitude + (maxAmplitude - minAmplitude) * speedRatio;
           composer.playDiscrete(amplitude, frequency);
-
-          runOnJS(onInteract)();
         })
         .onFinalize(() => {
           'worklet';
@@ -141,8 +172,10 @@ export function DetentedGimmick({ haptic, config, onInteract, children }: Props)
       center,
       clamp,
       composer,
+      countProgress,
       degreesPerDetent,
       detent,
+      detentsPerCount,
       frequency,
       lastFiredAt,
       maxAmplitude,

@@ -11,7 +11,10 @@ import { deleteKey, gimmickStateKey, storage, writeDebounced } from './storage';
  */
 
 export type GimmickState = {
-  /** 총 조작 횟수. 딸깍 1회, 눈금 1칸이 1이다. */
+  /**
+   * 총 조작 횟수. 무엇이 1인지는 기믹이 정한다 — 보통 딸깍 1회지만
+   * 다이얼은 한 바퀴다(`DetentedConfig.detentsPerCount`).
+   */
   count: number;
   /**
    * 선택된 변형 id. 없으면 기믹의 기본 변형을 쓴다.
