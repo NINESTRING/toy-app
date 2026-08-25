@@ -27,6 +27,9 @@ import { useHapticFire } from './useHapticFire';
  *
  * 릴리스가 사이클을 끝내므로 "한 번의 당김에 토글 1회"는 구조적으로 보장된다.
  *
+ * 기믹이 `canFire`를 주면 릴리스 순간 한 번 더 물어본다 — 임계값이 못 보는
+ * 방향·자세를 기믹의 기하로 거부할 수 있다.
+ *
  * 이 컴포넌트는 제스처·토글·복귀 스프링만 소유하고 생김새는 children에
  * 맡긴다. 모든 판정이 워크릿 안에서 끝난다. (§4)
  */
@@ -45,6 +48,15 @@ type Props = {
   haptic: PresetHaptic | PatternHaptic;
   config: TugConfig;
   onInteract: () => void;
+  /**
+   * 릴리스 시점에 발화를 거부할 수 있는 워크릿. 없으면 항상 허용한다.
+   *
+   * 임계값은 "얼마나 당겼나"만 보므로 **어느 쪽으로** 당겼는지는 못 가린다.
+   * 전구는 줄을 위로 밀어 올린 채 놓으면 안 켜져야 하는데(실제 풀체인은
+   * 밀어서 안 걸린다), 그 판정에 필요한 기하는 기믹이 갖고 있다. 그래서
+   * 판정을 여기서 만들지 않고 받아 쓴다 — `_kinds`는 기믹의 도형을 모른다.
+   */
+  canFire?: (dragX: number, dragY: number) => boolean;
   children: (state: TugRenderState) => React.ReactNode;
 };
 
@@ -59,7 +71,7 @@ type Props = {
  */
 const WHIP_SPRING = { damping: 12, stiffness: 300, mass: 1 };
 
-export function TugGimmick({ haptic, config, onInteract, children }: Props) {
+export function TugGimmick({ haptic, config, onInteract, canFire, children }: Props) {
   const dragX = useSharedValue(0);
   const dragY = useSharedValue(0);
   const on = useSharedValue(0);
@@ -132,18 +144,24 @@ export function TugGimmick({ haptic, config, onInteract, children }: Props) {
            * 발화 지점. 딸깍·불·카운트가 전부 손을 떼는 이 순간에 같이
            * 터진다 — 사용자가 스스로 만든 사건이라 인과가 또렷하다
            * (개정 스펙 §1). 취소도 릴리스로 친다.
+           *
+           * `canFire`가 거부하면 장전은 그냥 풀린다 — 불발이다. 장전을
+           * 남겨두면 다음에 손만 대도 터지므로 사이클과 함께 끝내야 한다.
            */
+          const allowed = canFire === undefined || canFire(dragX.value, dragY.value);
           if (armed.value) {
             armed.value = false;
-            on.value = on.value === 1 ? 0 : 1;
-            fireToggle();
-            runOnJS(onInteract)();
+            if (allowed) {
+              on.value = on.value === 1 ? 0 : 1;
+              fireToggle();
+              runOnJS(onInteract)();
+            }
           }
 
           dragX.value = withSpring(0, WHIP_SPRING);
           dragY.value = withSpring(0, WHIP_SPRING);
         }),
-    [active, dragX, dragY, armed, fireToggle, grabX, grabY, on, onInteract, threshold]
+    [active, canFire, dragX, dragY, armed, fireToggle, grabX, grabY, on, onInteract, threshold]
   );
 
   return <GestureDetector gesture={pan}>{children({ dragX, dragY, on, active })}</GestureDetector>;

@@ -69,6 +69,28 @@
 - 실제 걸쇠는 트립하면 되돌릴 수 없다. `latch` 프리셋을 고른 것과 같은 모델이다.
 - 피젯 토이에서 제일 나쁜 실패는 "다 당겼는데 안 켜졌네"다. 관대한 쪽이 옳다.
 
+### 줄이 늘어져 있으면 불발 (2026-08-25 추가)
+
+`armed`가 서 있어도 **릴리스 순간 줄이 원래 길이보다 짧으면 쏘지 않는다.**
+줄이 늘어졌다는 건 매듭을 위로 밀어 올린 상태라는 뜻이고, 실제 풀체인
+스위치는 밀어서는 안 걸린다 — 당겨야 걸린다.
+
+판정은 앵커→매듭의 **현 길이**로 한다. 휴지점이 앵커 바로 아래 `SPAN`(146pt)에
+있으므로 현은 `hypot(dragX, SPAN + dragY)`이고, 이게 `SPAN` 미만이면 불발이다.
+휴지점 자체(현 = SPAN)는 발화 쪽이다.
+
+옆으로만 당기는 것은 현을 늘리므로 발화한다(60pt 옆 → 현 157.8pt). 위로 밀되
+옆으로 크게 당긴 경우도 현이 길어지면 발화한다 — 방향이 아니라 **길이**가
+기준이다. 매듭을 앵커 위로 지나쳐 밀면 현이 오히려 더 짧아지므로 여전히 불발이다.
+
+**기하는 `cordPhysics.ts`가 갖고 `_kinds/tug.tsx`는 모른다.** tug의 임계값은
+"얼마나 당겼나"만 보므로 이 판정을 스스로 못 한다. 그래서 tug에 선택적
+`canFire?: (dragX, dragY) => boolean` 워크릿 prop을 두고, 전구가
+`isCordTaut`을 넘긴다. `_kinds`가 기믹의 도형을 모른다는 §4의 역할 분담을
+유지하려는 것이다 — `TugConfig`에 span을 넣었으면 146이 두 군데로 갈라진다.
+
+거부되면 `armed`는 그냥 풀린다. 장전을 남겨두면 다음에 손만 대도 터진다.
+
 ### 안 바뀌는 것
 
 거리는 **잡은 지점 기준**(`event.translationX/Y`)으로 잰다. 원본 §5의
@@ -248,8 +270,8 @@ S자는 앵커→매듭 **현이 로프보다 짧아질 때만** 나온다. 팽�
 
 | 파일 | 작업 |
 |---|---|
-| `src/gimmicks/_kinds/tug.tsx` | `fired` → `armed`, 발화를 `onFinalize`로, `WHIP_SPRING` damping |
-| `src/gimmicks/bulb/cordPhysics.ts` | 신규 — 순수 적분기. **import 금지**(Node 실행용) |
+| `src/gimmicks/_kinds/tug.tsx` | `fired` → `armed`, 발화를 `onFinalize`로, `WHIP_SPRING` damping, 선택적 `canFire` 거부권 |
+| `src/gimmicks/bulb/cordPhysics.ts` | 신규 — 순수 적분기 + `isCordTaut`. **import 금지**(Node 실행용) |
 | `src/gimmicks/bulb/cord.ts` | 신규 — `useCord` 훅. 프레임 콜백 · 수면 · Skia 경로 |
 | `src/gimmicks/bulb/index.tsx` | `cordPath`/`knotX`/`knotY` 제거 → `useCord` |
 | `src/gimmicks/types.ts` | `TugConfig`·`KindSpec.tug`·sling 대비 주석 |
@@ -277,6 +299,7 @@ S자는 앵커→매듭 **현이 로프보다 짧아질 때만** 나온다. 팽�
 | 쉴 때 레이아웃 (줄이 수직인지) | `npm run ios:sim` + 스크린샷 | 가능 |
 | 켜짐 상태 색 | 임시 Redirect로 강제 `on=1` + 스크린샷 | 가능 |
 | **출렁임 파형(렌더)** | 임시 필름스트립 화면 + 스크린샷 | 가능 — 아래 참조 |
+| `isCordTaut` 경계 | Node 하니스 11케이스 | 가능 |
 | **릴리스 토글 손맛, 물리 상수의 적정값** | 실기기 | **불가 — 미검증으로 넘김** |
 
 시뮬레이터는 터치를 못 넣는다 — 손맛은 실기기 항목이다.
