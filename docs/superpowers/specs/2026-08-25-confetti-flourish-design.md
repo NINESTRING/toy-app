@@ -151,8 +151,18 @@ particle.foil = Math.random() < FOIL_RATIO ? 1 : 0   // FOIL_RATIO = 0.34
 
 1. **타입 체크** — `tsc`.
 2. **glint 수식의 치역** — `s`를 전 구간 스윕해 결과 RGB가 0~1을 벗어나지
-   않음을 Node로 확인. 순수 산술이라 파일에서 떼어내 바로 돌릴 수 있다.
+   않음을 Node로 확인.
 3. **슬롯↔모양 배정** — `i % 4` 분포와 랩어라운드 정렬을 Node로 확인.
+
+2·3이 가능하려면 그 수학이 **import 없는 파일**에 있어야 한다. Node의 타입
+스트리핑은 타입만 벗겨낼 뿐이라, Skia나 Reanimated를 부르는 모듈은 실행되지
+않는다. 그래서 겉모습 수학을 `confettiLook.ts`로 떼어낸다 — `bulb/cordPhysics.ts`가
+같은 이유로 `bulb/cord.ts`에서 분리돼 있는 것과 같은 구조다.
+
+분리에는 검증 말고 또 하나의 이유가 있다. 플러터 위상 `sin(rot × 3)`이 지금
+변환 버퍼 안에 인라인으로 박혀 있는데, §2의 번쩍임이 **같은 위상**을 써야
+한다. 두 곳에 각각 두면 한쪽만 고쳤을 때 조용히 어긋난다 — 상수
+`FLUTTER_CYCLES` 하나를 두 곳이 공유하게 만든다.
 
 원 스펙 §7의 물리 상수가 지금도 "실기기 미검증"으로 남아 있는 것과 같은
 상태다. 수치(`FOIL_RATIO` 0.34, `GLINT_STRENGTH` 0.65, 마름모 8×8 등)는
@@ -164,4 +174,8 @@ particle.foil = Math.random() < FOIL_RATIO ? 1 : 0   // FOIL_RATIO = 0.34
 
 | 파일 | 작업 |
 |---|---|
-| `src/gimmicks/popper/confetti.tsx` | 텍스처 4칸화, `SPRITES` 슬롯 배정, `Particle.foil`, 색 버퍼 glint |
+| `src/gimmicks/popper/confettiLook.ts` | 신규 — import 없는 순수 겉모습 모듈. 칸 배정(`cellX`), 플러터 위상(`flutterScale`), 팔레트, 금박 색(`writeConfettiRgb`) |
+| `src/gimmicks/popper/confetti.tsx` | 텍스처 4칸화, `SPRITES` 슬롯 배정, `Particle.foil`, 색 버퍼를 순수 모듈에 위임 |
+
+`src/gimmicks/popper/index.tsx`는 건드리지 않는다 — `useConfetti`와
+`ConfettiAtlas`의 시그니처가 그대로다.
