@@ -4,6 +4,10 @@
 > 참조는 모두 [stack.md](../../../stack.md)의 절 번호다.
 > 레퍼런스: jh3y, [Tuggable Light Bulb!](https://codepen.io/jh3y/pen/VwjgdLj) (GSAP Draggable + MorphSVG)
 
+> ⚠️ **§2·§3의 토글 시점 결정과 §6의 줄 그리기는 개정됐다** →
+> [2026-08-25-bulb-cord-revision-design.md](./2026-08-25-bulb-cord-revision-design.md)
+> (토글이 임계값 통과 → 릴리스로, 줄이 2차 베지에 → 로프 체인 시뮬로)
+
 ---
 
 ## 0. 무엇을 만드는가
