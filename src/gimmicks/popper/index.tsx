@@ -87,16 +87,93 @@ const AIM_DOT_COLOR = '#ffffff';
 /** 줄무늬 기울기(라디안). 정적이므로 모듈 상수. */
 const STRIPE_TILT = [{ rotate: -0.35 }];
 
+/**
+ * 포를 잡을 수 있는 여유(pt). 실루엣 바깥으로 이만큼 넓힌 곳까지 잡힌다.
+ *
+ * 밑동은 반폭이 12pt뿐이라 실루엣대로만 받으면 손가락으로 못 짚는다. 24를
+ * 더하면 제일 좁은 밑동도 72pt 폭이 되어 최소 터치 타깃을 넘긴다.
+ */
+const GRAB_PADDING = 24;
+
+/** 포의 로컬 y 범위. 위는 포구 림 끝, 아래는 손잡이 밑. */
+const TIP_Y = -(CONE_LENGTH + 14);
+const BUTT_Y = HANDLE.height;
+
 function clamp01(value: number): number {
   'worklet';
   return Math.min(1, Math.max(0, value));
 }
 
+/**
+ * 포퍼 로컬 y에서의 실루엣 반폭(pt).
+ *
+ * 고깔은 밑동 12에서 포구 36으로 벌어지고 그 위에 반폭 42인 림이 얹힌다.
+ * 판정은 그걸 밑동 12 → 끝 42의 곧은 사다리꼴로 근사한다 — 고깔 중간에서
+ * 실제보다 3pt쯤 넓지만 `GRAB_PADDING`이 그보다 훨씬 크므로 의미가 없다.
+ */
+function popperHalfWidth(localY: number): number {
+  'worklet';
+  if (localY > 0) {
+    return HANDLE.width / 2;
+  }
+  const towardTip = Math.min(1, localY / TIP_Y);
+  return 12 + (RIM.width / 2 - 12) * towardTip;
+}
+
 export default function Popper({ gimmick, variant, onInteract }: GimmickScreenProps<'sling'>) {
+  /**
+   * 캔버스 실측 크기. 포의 화면 위치가 여기서 나오므로 그리기와 잡기 판정이
+   * 같은 값을 봐야 한다 — 그래서 `PopperBody`가 아니라 여기서 소유하고 내려준다.
+   */
+  const canvasSize = useSharedValue<SkSize>({ width: 0, height: 0 });
+
+  /**
+   * 포를 짚은 터치만 조준을 시작한다.
+   *
+   * 터치를 포퍼 **로컬 좌표로 되돌려** 판정한다. 포는 조준각으로 회전하고
+   * 당김만큼 눌려 있어서 화면 좌표에 고정된 상자로는 못 잡는다. 되돌리는
+   * 식은 `popperTransform`의 정확한 역이다 — 그리는 쪽이 바뀌면 여기도
+   * 같이 바뀌어야 한다.
+   */
+  const canGrab = React.useCallback(
+    (x: number, y: number, angle: number, power: number) => {
+      'worklet';
+      const { width, height } = canvasSize.value;
+      /** 레이아웃 전이면 포가 어디 있는지 모른다 — 그 터치는 안 잡힌 걸로. */
+      if (width === 0 || height === 0) {
+        return false;
+      }
+
+      /** `popperTransform`의 역: 피벗으로 옮기고, 조준각만큼 되돌리고, 눌림을 뺀다. */
+      const rotation = (angle - REST_ANGLE) * DEG2RAD;
+      const dx = x - width / 2;
+      const dy = y - (height - PIVOT_FROM_BOTTOM);
+      const cos = Math.cos(rotation);
+      const sin = Math.sin(rotation);
+      const localX = dx * cos + dy * sin;
+      const localY = -dx * sin + dy * cos - power * PULLBACK_MAX;
+
+      if (localY < TIP_Y - GRAB_PADDING || localY > BUTT_Y + GRAB_PADDING) {
+        return false;
+      }
+      /** 여유 상자 안에서 y를 실루엣 구간으로 자른 뒤 반폭을 잰다. */
+      const clampedY = Math.min(BUTT_Y, Math.max(TIP_Y, localY));
+      return Math.abs(localX) <= popperHalfWidth(clampedY) + GRAB_PADDING;
+    },
+    [canvasSize]
+  );
+
   return (
     <View style={CONTAINER}>
-      <SlingGimmick haptic={variant.haptic} config={gimmick.config} onInteract={onInteract}>
-        {({ angle, power, shot }) => <PopperBody angle={angle} power={power} shot={shot} />}
+      {/* `canGrab`: 포를 짚은 터치만 조준을 시작한다. 배경은 안 받는다. */}
+      <SlingGimmick
+        haptic={variant.haptic}
+        config={gimmick.config}
+        onInteract={onInteract}
+        canGrab={canGrab}>
+        {({ angle, power, shot }) => (
+          <PopperBody angle={angle} power={power} shot={shot} canvasSize={canvasSize} />
+        )}
       </SlingGimmick>
     </View>
   );
@@ -106,12 +183,11 @@ type BodyProps = {
   angle: SharedValue<number>;
   power: SharedValue<number>;
   shot: SharedValue<SlingShot>;
+  /** 캔버스 실측 크기. 전구와 같은 패턴 — `onSize`가 워크릿에서 채운다. */
+  canvasSize: SharedValue<SkSize>;
 };
 
-function PopperBody({ angle, power, shot }: BodyProps) {
-  /** 캔버스 실측 크기. 전구와 같은 패턴 — `onSize`가 워크릿에서 채운다. */
-  const canvasSize = useSharedValue<SkSize>({ width: 0, height: 0 });
-
+function PopperBody({ angle, power, shot, canvasSize }: BodyProps) {
   const backgroundWidth = useDerivedValue(() => canvasSize.value.width);
   const backgroundHeight = useDerivedValue(() => canvasSize.value.height);
   const gradientEnd = useDerivedValue(() => ({ x: 0, y: canvasSize.value.height }));
@@ -231,8 +307,13 @@ const CONTAINER: ViewStyle = {
 };
 
 /**
- * 제스처를 받는 뷰. 화면 전체다 — 포퍼를 직접 잡게 하면 당길수록
- * 손가락이 포퍼에서 멀어지는데 조준은 계속돼야 한다. 전구와 같은 원칙.
+ * 제스처를 받는 뷰. 배경이 화면 전체라 이 뷰도 화면 전체지만, **조준이
+ * 시작되는 건 포를 짚었을 때뿐이다**(판정은 `canGrab`).
+ *
+ * 원래는 화면 아무 데나 눌러도 잡혔다. 근거는 "당길수록 손가락이 포에서
+ * 멀어지는데 조준은 계속돼야 한다"였는데, 그건 **잡은 뒤**의 이야기이고
+ * 시작 지점과는 상관이 없었다 — 잡은 다음에는 지금도 화면 끝까지 끌 수 있다.
+ * 실제로 남은 건 배경 아무 데나 스쳐도 폭죽이 터지는 오발뿐이었다.
  */
 const BODY: ViewStyle = {
   flex: 1,
