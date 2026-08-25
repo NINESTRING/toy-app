@@ -106,11 +106,21 @@ npm run android:release    # 실기기 단독
 **프로파일 발급 시각**부터 돌기 때문이다. 만료 직전에 재설치해서 하루 벌고 끝나는
 건 대부분 이 함정이다.
 
-**오늘 발급받아 만 7일을 쓰려면 프로파일을 먼저 지운다.** 없으면 Xcode가 빌드할 때
-새로 발급하고, 그 순간부터 7일이 시작된다.
+**오늘 발급받아 만 7일을 쓰려면 프로파일을 지우고 Xcode를 한 번 연다.**
+
+지우기만 하고 바로 `npm run ios:release`를 하면 빌드가 실패한다:
+
+> ❌ No profiles for 'com.ninestring.toyapp' were found: … Automatic signing is
+> disabled and unable to generate a profile. To enable automatic signing, pass
+> `-allowProvisioningUpdates` to xcodebuild.
+
+`expo run:ios`는 `xcodebuild`에 `-allowProvisioningUpdates`를 넘기지 않는다(CLI에
+통과 옵션 자체가 없다). 그래서 프로파일이 없으면 **스스로 발급하지 못하고 그냥
+멈춘다.** 발급은 Xcode가 해야 한다 — 워크스페이스를 열어두기만 하면 자동 서명이
+알아서 새로 만든다. 빌드까지 갈 필요도 없고, 실측 15초쯤 걸렸다.
 
 ```bash
-# toyapp 프로파일만 지운다 (다른 앱 것은 건드리지 않는다)
+# 1. toyapp 프로파일만 지운다 (다른 앱 것은 건드리지 않는다)
 for f in ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*; do
   security cms -D -i "$f" > /tmp/pp.plist 2>/dev/null || continue
   case "$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' /tmp/pp.plist)" in
@@ -118,11 +128,15 @@ for f in ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*; do
   esac
 done
 
+# 2. Xcode가 새로 발급하게 한다. 아래 조회 명령으로 새 만료일이 보이면 닫아도 된다.
+open ios/toyapp.xcworkspace
+
+# 3. 그 다음에 빌드한다
 npm run ios:release
 ```
 
-빌드가 끝난 **직후**가 만료 시계의 0초다. 나가서 쓸 계획이라면 나가기 직전에 굽는
-게 하루를 번다.
+7일 시계는 설치 시각이 아니라 **2번에서 프로파일이 발급된 시각**부터 돈다. 빌드가
+길어져도 손해는 그 시간만큼이다.
 
 지금 며칠 남았는지는 이걸로 본다:
 
