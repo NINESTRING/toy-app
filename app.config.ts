@@ -26,14 +26,14 @@ const BUNDLE_ID = `${ORG}.${CODENAME}`;
 
 const config: ExpoConfig = {
   /**
-   * 스토어 표시명. 언제든 변경 가능하므로 지금은 플레이스홀더.
+   * 스토어 표시명. §8대로 언제든 변경 가능한 값이다.
    *
-   * TODO(§9): 주력 시장(한국 vs 글로벌) 확정 후 브랜드명으로 교체.
-   *   - ASO 규칙(§8): 이름에 "Fidget"을 넣지 않는다. 이미 20개 앱이
-   *     나눠 가진 키워드라 묻힌다. 대신 부제에 "Haptic Fidget Toys".
-   *   - 마케팅 규칙(§0): "불안 감소 입증" 류 문구 금지.
+   * ASO 규칙(§8)은 계속 살아있다: 이름에 "Fidget"을 넣지 않는다 — 이미 20개
+   * 앱이 나눠 가진 키워드라 묻힌다. 대신 **부제**에 "Haptic Fidget Toys".
+   * 부제는 아직 안 정했으므로 이 규칙은 아직 쓸 자리가 남아 있다.
+   * 마케팅 규칙(§0)도 그대로: "불안 감소 입증" 류 문구 금지.
    */
-  name: 'toy-app',
+  name: '토이앱',
   slug: 'toy-app',
   version: '1.0.0',
   orientation: 'portrait',

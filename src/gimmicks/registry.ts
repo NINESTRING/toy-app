@@ -1,3 +1,5 @@
+import { Disc3Icon, KeyboardIcon, LightbulbIcon, PartyPopperIcon } from 'lucide-react-native';
+
 import type { PresetName } from '@/haptics/presets';
 
 import type { Gimmick, GimmickVariant, HapticSpec } from './types';
@@ -6,7 +8,11 @@ import type { Gimmick, GimmickVariant, HapticSpec } from './types';
  * 기믹 레지스트리. (§4)
  *
  * 기믹 하나 추가하는 비용을 최소화하는 게 목표다. 새 기믹 = 여기 항목 하나 +
- * 폴더 하나. 항목이 순수 데이터 + lazy 컴포넌트이므로 신규 기믹을
+ * 폴더 하나. 갤러리 타일의 겉모습(`look`)도 그래서 여기 있다 — 셸에 별도
+ * 맵을 두면 추가할 곳이 셋이 된다. 자세한 근거는 `types.ts`의
+ * `GimmickLook`에.
+ *
+ * 항목이 (`look.icon`을 뺀) 순수 데이터 + lazy 컴포넌트이므로 신규 기믹을
  * EAS Update로 심사 없이 배포할 수 있다. (§7)
  *
  * 첫 스프린트는 Discrete 1개 + Detented 1개만 만든다. (§10) 이 둘이
@@ -18,6 +24,8 @@ export const GIMMICKS = [
   {
     id: 'keycap',
     name: '키캡',
+    /** 틴트는 이 기믹의 지배색에서 왔다 — 배경 그라디언트 #1a5ce0. */
+    look: { icon: KeyboardIcon, tint: 'blue' },
     kind: 'discrete',
     /**
      * 축은 적축 하나만 남겼다(갈축·사일런트 삭제). 셸의 축 선택 칩은
@@ -37,6 +45,8 @@ export const GIMMICKS = [
   {
     id: 'dial',
     name: '다이얼',
+    /** 틴트는 이 기믹의 지배색에서 왔다 — 혜성 팔레트 첫 색 #1DD1A1. */
+    look: { icon: Disc3Icon, tint: 'emerald' },
     kind: 'detented',
     /**
      * ⚠️ 미검증 값. 위와 같은 이유로 실기기 확인 필요.
@@ -77,6 +87,8 @@ export const GIMMICKS = [
   {
     id: 'bulb',
     name: '전구',
+    /** 틴트는 이 기믹의 지배색에서 왔다 — 글로우 #ffd97a. */
+    look: { icon: LightbulbIcon, tint: 'amber' },
     kind: 'tug',
     /**
      * 임계값을 넘긴 뒤 손을 떼는 순간의 딸깍. 실제 풀체인 스위치의 묵직한
@@ -101,6 +113,8 @@ export const GIMMICKS = [
   {
     id: 'popper',
     name: '파티 포퍼',
+    /** 틴트는 이 기믹의 지배색에서 왔다 — 콘 베이스 #ff6b6b. */
+    look: { icon: PartyPopperIcon, tint: 'rose' },
     kind: 'sling',
     /**
      * 당기는 동안 파워 비례 차징 럼블(연속 엔벨로프), 놓는 순간 펑.
