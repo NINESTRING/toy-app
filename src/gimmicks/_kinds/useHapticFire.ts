@@ -7,7 +7,7 @@ import type { PatternHaptic, PresetHaptic } from '@/gimmicks/types';
 /**
  * 단발 햅틱 스펙을 워크릿 호출 가능한 함수 하나로 만든다.
  *
- * discrete(터치 다운)와 tug(임계값 통과)가 공유한다 — 둘 다 "한 순간에
+ * discrete(터치 다운)와 tug(릴리스)가 공유한다 — 둘 다 "한 순간에
  * 한 방"이라 스펙 → 함수 변환이 같다.
  *
  * `usePatternComposer`는 훅이라 조건부로 호출할 수 없으므로, 프리셋인

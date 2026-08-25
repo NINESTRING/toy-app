@@ -26,13 +26,19 @@ import {
 import { TugGimmick } from '@/gimmicks/_kinds/tug';
 import type { GimmickScreenProps } from '@/gimmicks/types';
 
+import { useCord } from './cord';
+import { CORD_WIDTH, KNOT_R } from './cordPhysics';
+
 /**
  * 전구 — Tug 입력 모델. (§4)
  *
  * 레퍼런스: jh3y의 Tuggable Light Bulb (codepen.io/jh3y/pen/VwjgdLj).
- * 풀코드를 잡아당기면 전구가 켜지고/꺼지고 배경이 화면 전체로 밝아진다.
- * 놓으면 줄이 스프링 오버슈트로 출렁이며 돌아온다 — 레퍼런스의 MorphSVG
- * 출렁임을 `_kinds/tug.tsx`의 복귀 스프링이 대신한다(스펙 §3).
+ * 풀코드를 임계값 너머로 당겼다 **놓으면** 전구가 켜지고/꺼지고 배경이
+ * 화면 전체로 밝아진다.
+ *
+ * 놓으면 줄이 출렁이며 돌아온다. 레퍼런스의 MorphSVG 출렁임을 마디 12개
+ * 로프 시뮬(`cordPhysics.ts`)이 대신한다 — 복귀 스프링은 매듭만 끌고,
+ * 파형은 줄이 스스로 만든다(개정 스펙 §3).
  *
  * §1: 이 파일 안에서는 `className`을 쓰지 않는다.
  *
@@ -55,17 +61,11 @@ const GLOW_MAX_OPACITY = 0.55;
 /** 소켓 캡. 유리 아래를 살짝 덮는다. */
 const CAP = { x: 124, y: 172, width: 52, height: 54, radius: 10 };
 
-/** 줄의 시작(캡 바닥)과 휴지점 끝. `drag`는 끝점의 변위다. */
-const CORD_ANCHOR = { x: 150, y: 226 };
-const CORD_REST = { x: 150, y: 372 };
-const CORD_WIDTH = 6;
-const KNOT_R = 9;
-
 /**
- * 줄이 당겨졌을 때 제어점이 변위의 반대쪽으로 처지는 비율. 스프링이
- * 오버슈트할 때 제어점이 교대로 반대편에 남으며 줄이 S자로 출렁인다.
+ * 줄의 앵커·휴지점·굵기는 `cordPhysics.ts`에 있다 — 로프 시뮬이 그 값을
+ * 소유하고 여기선 굵기만 받아 쓴다. **앵커(150, 226)는 아래 CAP의 바닥
+ * 중앙이다.** CAP을 옮기면 거기도 같이 옮겨야 한다.
  */
-const CORD_BEND = 0.35;
 
 /**
  * 조명 전환 시간. 실제 전구는 즉시 켜진다 — 길게 잡으면 그게 체감 지연으로
@@ -109,7 +109,9 @@ export default function Bulb({ gimmick, variant, onInteract }: GimmickScreenProp
   return (
     <View style={CONTAINER}>
       <TugGimmick haptic={variant.haptic} config={gimmick.config} onInteract={onInteract}>
-        {({ dragX, dragY, on }) => <BulbBody dragX={dragX} dragY={dragY} on={on} />}
+        {({ dragX, dragY, on, active }) => (
+          <BulbBody dragX={dragX} dragY={dragY} on={on} active={active} />
+        )}
       </TugGimmick>
     </View>
   );
@@ -119,9 +121,11 @@ type BodyProps = {
   dragX: SharedValue<number>;
   dragY: SharedValue<number>;
   on: SharedValue<number>;
+  /** 로프 시뮬의 수면 게이트가 읽는다 — 드래그가 시작되면 깨운다. */
+  active: SharedValue<boolean>;
 };
 
-function BulbBody({ dragX, dragY, on }: BodyProps) {
+function BulbBody({ dragX, dragY, on, active }: BodyProps) {
   /** 캔버스 실측 크기. 키캡과 같은 패턴 — `onSize`가 워크릿에서 채운다. */
   const canvasSize = useSharedValue<SkSize>({ width: 0, height: 0 });
 
@@ -136,7 +140,7 @@ function BulbBody({ dragX, dragY, on }: BodyProps) {
   ]);
 
   /**
-   * 조명 진행값. `on`은 임계값 통과 순간 0↔1로 튀고, 색은 이걸 120ms로
+   * 조명 진행값. `on`은 손을 떼는 순간 0↔1로 튀고, 색은 이걸 120ms로
    * 따라간다. 햅틱·카운트는 `on`과 같은 순간에 이미 터져 있다(§0).
    */
   const progress = useSharedValue(0);
@@ -170,26 +174,11 @@ function BulbBody({ dragX, dragY, on }: BodyProps) {
   const glowOpacity = useDerivedValue(() => progress.value * GLOW_MAX_OPACITY);
 
   /**
-   * 줄. 앵커에서 끝점까지의 2차 베지어로, 제어점이 변위의 반대쪽으로
-   * 처진다 — 복귀 스프링이 오버슈트할 때마다 줄이 교대로 휘며 출렁인다.
-   *
-   * 키캡은 "워크릿에서 Skia 객체를 만들지 않는다"를 지켰지만 그건 도형이
-   * 전부 정적이라 가능했던 것이다. 줄은 형태 자체가 프레임마다 바뀌므로
-   * 여기서 만든다. 세그먼트 2개짜리 경로 하나라 할당 비용은 무시할 수 있다.
+   * 줄. 마디 12개 로프 체인이다 — 꼬리(매듭)는 tug의 복귀 스프링을 따라가고
+   * 몸통은 관성으로 뒤처지며 파형을 만든다(개정 스펙 §3). 원래는 2차 베지에
+   * 1개였는데 한쪽으로밖에 못 휘어서 출렁임이 "휘었다 펴졌다"로 읽혔다.
    */
-  const cordPath = useDerivedValue(() => {
-    const endX = CORD_REST.x + dragX.value;
-    const endY = CORD_REST.y + dragY.value;
-    const controlX = (CORD_ANCHOR.x + endX) / 2 - dragX.value * CORD_BEND;
-    const controlY = (CORD_ANCHOR.y + endY) / 2 - dragY.value * CORD_BEND;
-    return Skia.PathBuilder.Make()
-      .moveTo(CORD_ANCHOR.x, CORD_ANCHOR.y)
-      .quadTo(controlX, controlY, endX, endY)
-      .detach();
-  });
-
-  const knotX = useDerivedValue(() => CORD_REST.x + dragX.value);
-  const knotY = useDerivedValue(() => CORD_REST.y + dragY.value);
+  const { path: cordPath, knotX, knotY } = useCord({ dragX, dragY, active });
 
   return (
     /**
