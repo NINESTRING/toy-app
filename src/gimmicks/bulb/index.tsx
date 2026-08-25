@@ -27,7 +27,7 @@ import { TugGimmick } from '@/gimmicks/_kinds/tug';
 import type { GimmickScreenProps } from '@/gimmicks/types';
 
 import { useCord } from './cord';
-import { CORD_WIDTH, KNOT_R, isCordTaut } from './cordPhysics';
+import { CORD_REST, CORD_WIDTH, KNOT_R, isCordTaut } from './cordPhysics';
 
 /**
  * 전구 — Tug 입력 모델. (§4)
@@ -60,6 +60,16 @@ const GLOW_MAX_OPACITY = 0.55;
 
 /** 소켓 캡. 유리 아래를 살짝 덮는다. */
 const CAP = { x: 124, y: 172, width: 52, height: 54, radius: 10 };
+
+/**
+ * 매듭을 잡을 수 있는 반경(pt). 매듭 중심에서 잰다.
+ *
+ * 매듭 자체는 반지름 9pt라 그것만 노리게 하면 손가락에 가려 보이지도 않는
+ * 걸 조준하게 된다 — 그래서 넉넉히 감싼다(지름 88pt). 그래도 유리알·캡과는
+ * 겹치지 않는다: 매듭 휴지점 y=372에서 위로 44면 328이고 캡 바닥은 226이다.
+ * 화면 전체를 받던 예전 동작에서 여기로 좁힌 이유는 아래 `BODY` 주석에.
+ */
+const GRAB_RADIUS = 44;
 
 /**
  * 줄의 앵커·휴지점·굵기는 `cordPhysics.ts`에 있다 — 로프 시뮬이 그 값을
@@ -106,20 +116,51 @@ const SHINE_PATH = Skia.PathBuilder.Make()
   .detach();
 
 export default function Bulb({ gimmick, variant, onInteract }: GimmickScreenProps<'tug'>) {
+  /**
+   * 캔버스 실측 크기. 그리기만 쓸 때는 `BulbBody`가 갖고 있었는데, 이제
+   * 잡기 판정도 설계 좌표 → 화면 좌표 변환이 필요해서 여기로 올렸다 —
+   * 제스처와 그림이 같은 값을 봐야 매듭 그림 위를 눌렀을 때 잡힌다.
+   */
+  const canvasSize = useSharedValue<SkSize>({ width: 0, height: 0 });
+
+  /**
+   * 매듭 근처를 눌렀을 때만 잡힌다.
+   *
+   * 매듭의 화면 위치는 `centerTransform`(설계 상자를 캔버스 가운데로)과
+   * 매듭의 설계 좌표(`CORD_REST` + 변위)를 합친 것이다. 그리는 쪽과 같은
+   * 식을 쓰므로 눈에 보이는 매듭이 곧 판정 중심이다.
+   */
+  const canGrab = React.useCallback(
+    (x: number, y: number, dragX: number, dragY: number) => {
+      'worklet';
+      const { width, height } = canvasSize.value;
+      /** 레이아웃 전이면 매듭이 어디 있는지 모른다 — 그 터치는 안 잡힌 걸로. */
+      if (width === 0 || height === 0) {
+        return false;
+      }
+      const knotX = (width - DESIGN_W) / 2 + CORD_REST.x + dragX;
+      const knotY = (height - DESIGN_H) / 2 + CORD_REST.y + dragY;
+      return (x - knotX) ** 2 + (y - knotY) ** 2 <= GRAB_RADIUS ** 2;
+    },
+    [canvasSize]
+  );
+
   return (
     <View style={CONTAINER}>
       {/*
         `canFire`: 줄이 늘어진 채로 놓으면 불발이다. 줄을 위로 밀어 올린
         상태라는 뜻이고, 실제 풀체인은 밀어서 안 걸린다 — 당겨야 걸린다.
+
+        `canGrab`: 매듭 근처에서 시작한 터치만 줄을 잡는다.
       */}
       <TugGimmick
         haptic={variant.haptic}
         config={gimmick.config}
         onInteract={onInteract}
         canFire={isCordTaut}
-      >
+        canGrab={canGrab}>
         {({ dragX, dragY, on, active }) => (
-          <BulbBody dragX={dragX} dragY={dragY} on={on} active={active} />
+          <BulbBody dragX={dragX} dragY={dragY} on={on} active={active} canvasSize={canvasSize} />
         )}
       </TugGimmick>
     </View>
@@ -132,12 +173,11 @@ type BodyProps = {
   on: SharedValue<number>;
   /** 로프 시뮬의 수면 게이트가 읽는다 — 드래그가 시작되면 깨운다. */
   active: SharedValue<boolean>;
+  /** 캔버스 실측 크기. 키캡과 같은 패턴 — `onSize`가 워크릿에서 채운다. */
+  canvasSize: SharedValue<SkSize>;
 };
 
-function BulbBody({ dragX, dragY, on, active }: BodyProps) {
-  /** 캔버스 실측 크기. 키캡과 같은 패턴 — `onSize`가 워크릿에서 채운다. */
-  const canvasSize = useSharedValue<SkSize>({ width: 0, height: 0 });
-
+function BulbBody({ dragX, dragY, on, active, canvasSize }: BodyProps) {
   const backgroundWidth = useDerivedValue(() => canvasSize.value.width);
   const backgroundHeight = useDerivedValue(() => canvasSize.value.height);
   const gradientEnd = useDerivedValue(() => ({ x: 0, y: canvasSize.value.height }));
@@ -165,21 +205,15 @@ function BulbBody({ dragX, dragY, on, active }: BodyProps) {
     interpolateColor(progress.value, [0, 1], PALETTE.backgroundTop),
     interpolateColor(progress.value, [0, 1], PALETTE.backgroundBottom),
   ]);
-  const cordColor = useDerivedValue(() =>
-    interpolateColor(progress.value, [0, 1], PALETTE.cord)
-  );
+  const cordColor = useDerivedValue(() => interpolateColor(progress.value, [0, 1], PALETTE.cord));
   const glassFillColor = useDerivedValue(() =>
     interpolateColor(progress.value, [0, 1], PALETTE.glassFill)
   );
   const filamentColor = useDerivedValue(() =>
     interpolateColor(progress.value, [0, 1], PALETTE.filament)
   );
-  const capColor = useDerivedValue(() =>
-    interpolateColor(progress.value, [0, 1], PALETTE.cap)
-  );
-  const shineColor = useDerivedValue(() =>
-    interpolateColor(progress.value, [0, 1], PALETTE.shine)
-  );
+  const capColor = useDerivedValue(() => interpolateColor(progress.value, [0, 1], PALETTE.cap));
+  const shineColor = useDerivedValue(() => interpolateColor(progress.value, [0, 1], PALETTE.shine));
   const glowOpacity = useDerivedValue(() => progress.value * GLOW_MAX_OPACITY);
 
   /**
@@ -278,8 +312,13 @@ const CONTAINER: ViewStyle = {
 };
 
 /**
- * 제스처를 받는 뷰. 화면 전체다 — 줄 끝만 잡게 하면 손가락에 가려 보이지도
- * 않는 9pt 원을 조준하게 된다. 피젯 토이에선 타깃이 큰 게 이득이다.
+ * 제스처를 받는 뷰. 배경이 화면 전체라 이 뷰도 화면 전체지만, **잡히는 건
+ * 매듭 반경 안뿐이다**(`GRAB_RADIUS`, 판정은 `canGrab`).
+ *
+ * 원래는 화면 아무 데나 끌어도 잡혔다 — 9pt 매듭을 조준시키느니 타깃이 큰
+ * 게 낫다는 판단이었다. 실제로 써 보니 반대였다: 줄과 상관없는 곳을 쓸어도
+ * 전구가 켜져서 인과가 끊긴다. 조준 문제는 타깃을 화면 전체로 키우는 대신
+ * 매듭을 88pt로 감싸서 푼다.
  */
 const BODY: ViewStyle = {
   flex: 1,
