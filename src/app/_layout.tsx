@@ -10,7 +10,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useUniwind } from 'uniwind';
 
 import { configureAudioSession } from '@/audio/pool';
-import { BUNDLED_PRESETS } from '@/gimmicks/registry';
 import { initHaptics } from '@/haptics/engine';
 import { NAV_THEME } from '@/lib/theme';
 import { flushPendingWrites } from '@/store/storage';
@@ -26,9 +25,12 @@ export default function RootLayout() {
   /**
    * 햅틱 엔진은 앱 시작 시 한 번 올리고 내리지 않는다. (§4 원칙 3)
    * 기믹 전환마다 엔진을 새로 만들면 첫 딸깍이 씹힌다.
+   *
+   * 프리셋 preload는 여기서 하지 않는다 — 릴리스 빌드에서 그게 프리셋을
+   * 무음으로 만들었다. 이유는 `initHaptics` 주석에.
    */
   React.useEffect(() => {
-    initHaptics(BUNDLED_PRESETS);
+    initHaptics();
     void configureAudioSession();
   }, []);
 

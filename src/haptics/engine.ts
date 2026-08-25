@@ -18,21 +18,43 @@ let initialized = false;
 /**
  * 앱 시작 시 한 번 호출한다.
  *
- * @param preload 번들에 포함된 기믹들이 쓰는 프리셋. 미리 캐시에 올려두면
- *   기믹 첫 진입의 첫 딸깍이 씹히지 않는다. OTA로 내려온 기믹(§7)의
- *   프리셋은 여기 없으므로 해당 기믹 진입 시 `preloadPresets`로 보충한다.
+ * **여기서 preload를 하면 안 된다.** 원래는 §4 원칙 3대로 번들 기믹의 프리셋을
+ * 전부 미리 캐시에 올렸는데, 그게 릴리스 빌드에서 그 프리셋들을 통째로
+ * 무음으로 만들었다.
+ *
+ * 실기기에서 확인한 것(Debug에서는 안 나타나고 Release에서만 재현):
+ *
+ *   - 무음인 프리셋이 preload 목록과 **정확히 일치**했다. 목록에 없는
+ *     프리셋(thump, blip)은 멀쩡했다.
+ *   - `clearCache()`를 부르면 무음이던 게 살아났다 — 캐시에 박힌 항목이
+ *     깨져 있었다는 뜻이다.
+ *   - **같은 `preloadPresets` 호출을 앱이 뜬 뒤에 하면 멀쩡했다.** 그래서
+ *     범인은 호출 자체가 아니라 호출 시점이다.
+ *
+ * 릴리스는 JS 시작이 빨라 이 `useEffect`가 네이티브 햅틱 엔진이 준비되기 전에
+ * 돈다. 그 시점의 preload가 깨진 캐시 항목을 만들고, 그게 계속 재생된다.
+ * Debug는 번들 로딩이 느려서 그 사이에 엔진이 올라오므로 안 걸린다.
+ *
+ * 캐시를 끄는 건 답이 아니다 — `enableCache(false)`로 두면 재생이 아예 안 된다
+ * (그것도 실기기에서 확인했다). 캐시는 켜두고 채우는 건 Pulsar의 on-demand
+ * 로딩에 맡긴다. 미preload 프리셋도 문제없이 울리는 걸 확인했다.
  */
-export function initHaptics(preload: readonly PresetName[]): void {
+export function initHaptics(): void {
   if (initialized) {
     return;
   }
   initialized = true;
 
   Settings.enableCache(true);
-  preloadPresets(preload);
 }
 
-/** 프리셋을 엔진 캐시에 올린다. 이미 올라간 것은 Pulsar가 무시한다. */
+/**
+ * 프리셋을 엔진 캐시에 올린다. 이미 올라간 것은 Pulsar가 무시한다.
+ *
+ * ⚠️ **앱 시작 직후에 부르지 말 것.** 엔진이 준비되기 전에 부르면 깨진 항목이
+ * 박혀서 그 프리셋이 영구히 무음이 된다 — 이유는 `initHaptics` 주석에.
+ * 쓸 일이 생기면(OTA 기믹 등) 화면이 뜨고 난 뒤에 부른다.
+ */
 export function preloadPresets(names: readonly PresetName[]): void {
   if (names.length === 0) {
     return;

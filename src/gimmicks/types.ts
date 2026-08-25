@@ -1,7 +1,9 @@
+import type { LucideIcon } from 'lucide-react-native';
 import type { ComponentType } from 'react';
 import type { Pattern } from 'react-native-pulsar';
 
 import type { PresetName } from '@/haptics/presets';
+import type { TintName } from '@/lib/tints';
 
 /**
  * 기믹 레지스트리 계약. (§4)
@@ -233,11 +235,44 @@ export type GimmickScreenProps<K extends GimmickKind = GimmickKind> = {
   onInteract: () => void;
 };
 
+/**
+ * 갤러리 타일의 겉모습.
+ *
+ * **왜 기믹 컴포넌트가 아니라 여기 있는가.** `GimmickVariant` 주석이 "시각
+ * 정보는 기믹 컴포넌트가 자기 것으로 갖는다"고 정했지만, 갤러리는 그걸 읽을
+ * 수 없다 — 아래 `LazyComponent` 주석의 §4 원칙 2가 갤러리의 기믹 컴포넌트
+ * import를 금지한다. 그 원칙이 성립하는 한 갤러리용 시각 정보는 컴포넌트
+ * 밖에 있어야 하고, `name`·`sound`와 같은 성격(셸이 읽는 표시용 데이터)이므로
+ * 자리는 여기다. 별도 맵으로 빼면 기믹 추가 비용이 2곳에서 3곳으로 늘어
+ * registry의 목표를 깬다.
+ *
+ * 옵셔널이 아니다 — 옵셔널이면 새 기믹이 아이콘 없는 빈 타일로 갤러리에
+ * 나타나는 걸 컴파일 타임에 막을 방법이 없다.
+ */
+export type GimmickLook = {
+  /**
+   * lucide 아이콘.
+   *
+   * 이것 때문에 registry가 완전한 JSON은 아니게 된다. EAS Update(§7)는 JS
+   * 번들을 실어 보내므로 영향 없고, 서버 주도 registry는 지금 없는 요구사항
+   * 이라 감수한다. 필요해지면 문자열 키로 바꾸고 셸에 아이콘 맵을 두면
+   * 된다 — `tint`가 이미 그 형태다.
+   */
+  icon: LucideIcon;
+  /**
+   * 틴트 이름. 실제 클래스 문자열은 셸(`lib/tints.ts`)이 갖는다 — 색을 어떻게
+   * 칠하는지는 테마의 관심사이고, registry는 "이 기믹은 파란색"까지만 말한다.
+   */
+  tint: TintName;
+};
+
 type GimmickBase = {
   id: string;
   name: string;
   /** 에셋 키. 사운드는 §5대로 플레이어 풀을 거친다. */
   sound?: string;
+  /** 갤러리 타일의 아이콘과 틴트. */
+  look: GimmickLook;
 };
 
 /**

@@ -1,3 +1,5 @@
+import { Disc3Icon, KeyboardIcon, LightbulbIcon, PartyPopperIcon } from 'lucide-react-native';
+
 import type { PresetName } from '@/haptics/presets';
 
 import type { Gimmick, GimmickVariant, HapticSpec } from './types';
@@ -6,7 +8,11 @@ import type { Gimmick, GimmickVariant, HapticSpec } from './types';
  * 기믹 레지스트리. (§4)
  *
  * 기믹 하나 추가하는 비용을 최소화하는 게 목표다. 새 기믹 = 여기 항목 하나 +
- * 폴더 하나. 항목이 순수 데이터 + lazy 컴포넌트이므로 신규 기믹을
+ * 폴더 하나. 갤러리 타일의 겉모습(`look`)도 그래서 여기 있다 — 셸에 별도
+ * 맵을 두면 추가할 곳이 셋이 된다. 자세한 근거는 `types.ts`의
+ * `GimmickLook`에.
+ *
+ * 항목이 (`look.icon`을 뺀) 순수 데이터 + lazy 컴포넌트이므로 신규 기믹을
  * EAS Update로 심사 없이 배포할 수 있다. (§7)
  *
  * 첫 스프린트는 Discrete 1개 + Detented 1개만 만든다. (§10) 이 둘이
@@ -18,6 +24,8 @@ export const GIMMICKS = [
   {
     id: 'keycap',
     name: '키캡',
+    /** 틴트는 이 기믹의 지배색에서 왔다 — 배경 그라디언트 #1a5ce0. */
+    look: { icon: KeyboardIcon, tint: 'blue' },
     kind: 'discrete',
     /**
      * 축은 적축 하나만 남겼다(갈축·사일런트 삭제). 셸의 축 선택 칩은
@@ -25,20 +33,20 @@ export const GIMMICKS = [
      * UI도 함께 사라진다 — 저장된 축 id(tactile/silent)가 남아 있어도 셸이
      * 합성 기본 변형으로 떨어진다.
      *
-     * 프리셋은 원래 갈축에 배정했던 `keyboardMechanical`을 적축이 물려받았다.
-     *
-     * ⚠️ 미검증 값이다. §10은 코드를 짜기 전에 Pulsar Live Preview에서
-     * 실제로 느껴보고 고르라고 지시하는데, 그건 실기기가 필요한 작업이라
-     * 아직 못 했다. 다이얼·전구와 같은 상태다. 후보:
-     *   keyboardMechanical, plunk, snap, latch, ratchet, thud
+     * 프리셋은 갈축에 배정했던 `keyboardMechanical`을 적축이 물려받았다가
+     * `ratchet`으로 바뀌었다 — 실기기에서 후보 6개(keyboardMechanical, plunk,
+     * snap, latch, ratchet, thud)를 손으로 비교해 고른 값이다. §10이 요구한
+     * 절차를 뒤늦게 밟은 것이고, 이제 미검증이 아니다.
      */
-    haptic: { type: 'preset', name: 'keyboardMechanical' },
+    haptic: { type: 'preset', name: 'ratchet' },
     config: {/** 릴리스 햅틱 없음 — 누를 때 한 방이면 충분하다. */},
     component: () => import('./keycap'),
   },
   {
     id: 'dial',
     name: '다이얼',
+    /** 틴트는 이 기믹의 지배색에서 왔다 — 혜성 팔레트 첫 색 #1DD1A1. */
+    look: { icon: Disc3Icon, tint: 'emerald' },
     kind: 'detented',
     /**
      * ⚠️ 미검증 값. 위와 같은 이유로 실기기 확인 필요.
@@ -79,17 +87,19 @@ export const GIMMICKS = [
   {
     id: 'bulb',
     name: '전구',
+    /** 틴트는 이 기믹의 지배색에서 왔다 — 글로우 #ffd97a. */
+    look: { icon: LightbulbIcon, tint: 'amber' },
     kind: 'tug',
     /**
      * 임계값을 넘긴 뒤 손을 떼는 순간의 딸깍. 실제 풀체인 스위치의 묵직한
-     * 걸쇠 느낌을 노리고 `latch`를 골랐다.
+     * 걸쇠 느낌을 노렸다. 이름만 보고 `latch`를 골랐었는데, 실기기에서
+     * 후보(latch, lock, snap, trigger, clasp, knock)를 비교해 `knock`으로
+     * 정했다 — 이제 미검증이 아니다.
      *
-     * ⚠️ 미검증 값이다. 키캡·다이얼과 같은 상태 — §10의 Live
-     * Preview 절차는 실기기가 필요하다. 후보:
-     *   latch, lock, snap, trigger, toggleOn/toggleOff(켜짐·꺼짐 분리 —
-     *   config 확장이 필요해서 후속으로 미뤘다, 스펙 §7)
+     * 켜짐·꺼짐을 다른 햅틱으로 나누는 건 여전히 후속이다(config 확장이
+     * 필요하다, 스펙 §7).
      */
-    haptic: { type: 'preset', name: 'latch' },
+    haptic: { type: 'preset', name: 'knock' },
     config: {
       /**
        * 토글로 인정하는 당김 거리(pt). 레퍼런스는 50px — 손가락 기준으로
@@ -103,19 +113,28 @@ export const GIMMICKS = [
   {
     id: 'popper',
     name: '파티 포퍼',
+    /** 틴트는 이 기믹의 지배색에서 왔다 — 콘 베이스 #ff6b6b. */
+    look: { icon: PartyPopperIcon, tint: 'rose' },
     kind: 'sling',
     /**
      * 당기는 동안 파워 비례 차징 럼블(연속 엔벨로프), 놓는 순간 펑.
      *
-     * ⚠️ 미검증 값이다. 키캡·다이얼·전구와 같은 상태 — §10의 Live
-     * Preview 절차는 실기기가 필요하다. fire 후보:
-     *   balloonPop, burst, firecracker, explosion, snap
-     * charge는 "당길수록 팽팽해진다"가 느껴질 때까지 범위를 조정한다.
+     * fire는 실기기에서 골랐다. 원래 `balloonPop`이었는데 **그 프리셋이 이
+     * 기기에서 아무 느낌도 안 났다** — 무음 프리셋이 실재한다는 게 이번에
+     * 확인됐다. 후보(burst, firecracker, explosion, snap, flourish)를 눌러보고
+     * `flourish`로 정했다.
+     *
+     * 무음 프리셋은 최악의 실패 모드다(§0 — 햅틱이 곧 제품인데 아무 일도
+     * 안 일어난다). 새 기믹에 프리셋을 배정하면 실기기에서 한 번은 눌러봐야
+     * 한다. 타입 검사는 이름이 존재하는지만 보고 느껴지는지는 못 본다.
+     *
+     * ⚠️ charge(연속 엔벨로프)는 아직 미검증이다. "당길수록 팽팽해진다"가
+     * 느껴질 때까지 범위를 조정해야 한다.
      */
     haptic: {
       type: 'sling',
       charge: { minAmplitude: 0.1, maxAmplitude: 0.7, minFrequency: 0.2, maxFrequency: 0.6 },
-      fire: { type: 'preset', name: 'balloonPop' },
+      fire: { type: 'preset', name: 'flourish' },
     },
     config: {
       /** 파워 1.0에 도달하는 당김 거리(pt). 화면 절반쯤 당기면 풀파워. */
