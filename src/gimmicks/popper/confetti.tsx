@@ -1,5 +1,8 @@
 import {
   Atlas,
+  Circle,
+  Group,
+  Path,
   Rect,
   Skia,
   useColorBuffer,
@@ -17,6 +20,17 @@ import {
 
 import type { SlingShot } from '@/gimmicks/_kinds/sling';
 
+import {
+  CELL,
+  FOIL_RATIO,
+  PALETTE,
+  TEXTURE_HEIGHT,
+  TEXTURE_WIDTH,
+  cellX,
+  flutterScale,
+  writeConfettiRgb,
+} from './confettiLook';
+
 /**
  * 색종이 파티클 시스템. (스펙 §7)
  *
@@ -31,6 +45,10 @@ import type { SlingShot } from '@/gimmicks/_kinds/sling';
  * 도는 매퍼다. 파티클 배열은 제자리 변형이라 그것만으로는 안 깨어나므로,
  * 프레임 콜백이 tick을 증가시켜 매 프레임 갱신을 트리거한다.
  *
+ * 겉모습(칸 배정·플러터 위상·금박 색)은 `confettiLook.ts`가 소유한다 —
+ * import가 없어 Node로 직접 검증되는 파일이다. 여기 남은 건 물리 적분과
+ * Skia 버퍼 배선이다.
+ *
  * 훅(`useConfetti`)과 그리는 컴포넌트(`ConfettiAtlas`)를 나눠 둔 이유:
  * Skia는 `Canvas`의 자식을 별도 react-reconciler 루트에 마운트하므로
  * Canvas 안에서 훅을 부르면 RN 트리가 아닌 그 루트의 생명주기를 탄다.
@@ -40,12 +58,8 @@ import type { SlingShot } from '@/gimmicks/_kinds/sling';
 
 const POOL_SIZE = 256;
 
-/** 스프라이트(직사각 색종이 조각) 원본 크기. 개체 스케일이 곱해진다. */
-const SPRITE_W = 6;
-const SPRITE_H = 10;
-
 /** `useTexture`의 deps에 들어가므로 반드시 모듈 상수 — 인라인 리터럴이면 발사마다 텍스처를 새로 굽는다. */
-const SPRITE_SIZE = { width: SPRITE_W, height: SPRITE_H };
+const TEXTURE_SIZE = { width: TEXTURE_WIDTH, height: TEXTURE_HEIGHT };
 
 /** 발사 1회당 개수: 40 + 80 × power. (스펙 §7) */
 const COUNT_BASE = 40;
@@ -63,21 +77,42 @@ const FADE_SECONDS = 0.6; // 수명 끝 페이드아웃 구간
 
 const DEG2RAD = Math.PI / 180;
 
-/**
- * 축제 6색 — 고깔과 같은 계열(스펙 §7). 레퍼런스의 전면 랜덤 RGB는 탁한
- * 색이 절반이라 버렸다. SkColor(Float32Array)에 바로 쓰도록 0~1 RGB.
- */
-const PALETTE: readonly (readonly [number, number, number])[] = [
-  [1.0, 0.42, 0.42], // 코랄 #ff6b6b
-  [1.0, 0.85, 0.24], // 옐로 #ffd93d
-  [0.31, 0.8, 0.77], // 민트 #4ecdc4
-  [0.27, 0.67, 0.95], // 스카이 #45aaf2
-  [0.65, 0.37, 0.92], // 바이올렛 #a55eea
-  [0.99, 0.47, 0.66], // 핑크 #fd79a8
-];
+/** 마름모(칸 3)의 경로. 정적이므로 모듈 상수 — 키캡·고깔과 같은 패턴. */
+const DIAMOND_PATH = Skia.PathBuilder.Make()
+  .moveTo(CELL * 3 + 6, 2)
+  .lineTo(CELL * 3 + 10, 6)
+  .lineTo(CELL * 3 + 6, 10)
+  .lineTo(CELL * 3 + 2, 6)
+  .close()
+  .detach();
 
-/** Atlas의 스프라이트 소스 — 전 개체가 같은 조각을 쓴다. */
-const SPRITES = new Array(POOL_SIZE).fill(Skia.XYWHRect(0, 0, SPRITE_W, SPRITE_H));
+/**
+ * 시트에 구울 종이 4종. 전부 흰색이다 — 색은 Atlas colors가 개체별로 입힌다.
+ *
+ * **모든 모양은 칸 경계에서 0.5pt 안쪽에 있다.** 칸이 가로로 붙어 있어서
+ * 경계에 닿은 픽셀은 겹선형 필터링에서 이웃 칸 색을 빨아들인다. 리본이
+ * 3×12가 아니라 3×11인 게 그 이유다.
+ */
+const CONFETTI_SHEET = (
+  <Group>
+    {/* 0 — 직사각. 개정 전 조각과 같은 6×10, 기존 손맛의 기준점이다. */}
+    <Rect x={3} y={1} width={6} height={10} color="white" />
+    {/* 1 — 리본. */}
+    <Rect x={CELL + 4.5} y={0.5} width={3} height={11} color="white" />
+    {/* 2 — 원형. */}
+    <Circle cx={CELL * 2 + 6} cy={6} r={4.5} color="white" />
+    {/* 3 — 마름모. */}
+    <Path path={DIAMOND_PATH} color="white" />
+  </Group>
+);
+
+/**
+ * 슬롯마다 자기 칸을 가리킨다. `Atlas`의 `sprites`는 워크릿 버퍼가 아니라
+ * 정적 배열이라 이 배정은 앱 수명 내내 고정이다 — `cellX` 주석 참조.
+ */
+const SPRITES = Array.from({ length: POOL_SIZE }, (_, slot) =>
+  Skia.XYWHRect(cellX(slot), 0, CELL, CELL)
+);
 
 type Particle = {
   x: number;
@@ -88,11 +123,24 @@ type Particle = {
   rotV: number; // 라디안/s
   scale: number;
   colorIndex: number;
+  /** 1이면 금박 — 회전하며 빛을 스친다. 색 버퍼만 읽는다(물리와 무관). */
+  foil: number;
   life: number; // 남은 초. 0 이하 = 죽음
 };
 
 function makeDeadParticle(): Particle {
-  return { x: 0, y: 0, vx: 0, vy: 0, rot: 0, rotV: 0, scale: 1, colorIndex: 0, life: 0 };
+  return {
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    rot: 0,
+    rotV: 0,
+    scale: 1,
+    colorIndex: 0,
+    foil: 0,
+    life: 0,
+  };
 }
 
 type Props = {
@@ -112,21 +160,18 @@ export type ConfettiAtlasProps = {
 
 export function useConfetti({ shot, muzzle, canvasSize }: Props): ConfettiAtlasProps {
   /**
-   * 흰 조각 하나를 GPU 텍스처로. 색은 Atlas colors가 개체별로 입힌다 —
-   * srcIn이라 스프라이트의 알파만 남기고 색을 통째로 덮는다.
+   * 종이 4종을 한 장의 GPU 텍스처로. 전부 흰색으로 굽고 색은 Atlas colors가
+   * 개체별로 입힌다 — modulate가 텍셀 × 개체색이라 흰 텍셀이 개체색 그대로
+   * 통과한다(`ConfettiAtlas`의 블렌드 주석 참조).
    *
-   * 엘리먼트는 인라인이어도 된다 — `useTexture`가 그리기 이펙트에 넘기는
-   * deps는 세 번째 인자(생략 시 `[]`)뿐이라 엘리먼트 identity는 안 본다.
-   * 반면 size는 `usePictureAsTexture`의 deps에 그대로 들어가므로 상수여야 한다.
+   * 엘리먼트는 모듈 상수다 — `useTexture`가 그리기 이펙트에 넘기는 deps는
+   * 세 번째 인자(생략 시 `[]`)뿐이라 identity를 보진 않지만, 매 렌더 새
+   * 엘리먼트를 만들 이유도 없다. 반면 size는 `usePictureAsTexture`의 deps에
+   * 그대로 들어가므로 반드시 상수여야 한다.
    */
-  const texture = useTexture(
-    <Rect x={0} y={0} width={SPRITE_W} height={SPRITE_H} color="white" />,
-    SPRITE_SIZE
-  );
+  const texture = useTexture(CONFETTI_SHEET, TEXTURE_SIZE);
 
-  const particles = useSharedValue<Particle[]>(
-    Array.from({ length: POOL_SIZE }, makeDeadParticle)
-  );
+  const particles = useSharedValue<Particle[]>(Array.from({ length: POOL_SIZE }, makeDeadParticle));
   /** 링버퍼 커서 — 다음 스폰이 덮어쓸 슬롯. */
   const cursor = useSharedValue(0);
   /** 살아있는 개수. 0이면 프레임 콜백이 일찍 반환한다(스펙 §7). */
@@ -161,6 +206,7 @@ export function useConfetti({ shot, muzzle, canvasSize }: Props): ConfettiAtlasP
         particle.rotV = (Math.random() - 0.5) * 12;
         particle.scale = 1 + Math.random() * 0.8;
         particle.colorIndex = Math.floor(Math.random() * PALETTE.length);
+        particle.foil = Math.random() < FOIL_RATIO ? 1 : 0;
         particle.life = LIFE_BASE + Math.random() * LIFE_JITTER;
       }
 
@@ -222,29 +268,30 @@ export function useConfetti({ shot, muzzle, canvasSize }: Props): ConfettiAtlasP
       xform.set(0, 0, 0, 0); // 스케일 0 — 그려지지 않는다
       return;
     }
-    const flutter = 0.75 + 0.25 * Math.sin(particle.rot * 3);
+    const flutter = flutterScale(particle.rot);
     const scale = particle.scale * flutter;
     const scos = Math.cos(particle.rot) * scale;
     const ssin = Math.sin(particle.rot) * scale;
-    const cx = SPRITE_W / 2;
-    const cy = SPRITE_H / 2;
+    /** 칸이 정사각이라 중심 보정이 모양과 무관하게 하나다(confettiLook의 CELL 주석). */
+    const center = CELL / 2;
     xform.set(
       scos,
       ssin,
-      particle.x - (scos * cx - ssin * cy),
-      particle.y - (ssin * cx + scos * cy)
+      particle.x - (scos * center - ssin * center),
+      particle.y - (ssin * center + scos * center)
     );
   });
 
-  /** 개체 색 + 수명 끝 페이드아웃. SkColor는 [r,g,b,a] Float32Array다. */
+  /**
+   * 개체 색 + 수명 끝 페이드아웃. SkColor는 [r,g,b,a] Float32Array다.
+   * RGB는 `writeConfettiRgb`가 제자리에 채운다 — 금박이면 회전 위상에 따라
+   * 번쩍이고, 무광이면 팔레트 색 그대로다. 알파만 여기서 정한다.
+   */
   const colors = useColorBuffer(POOL_SIZE, (color, index) => {
     'worklet';
     void tick.value;
     const particle = particles.value[index];
-    const rgb = PALETTE[particle.colorIndex];
-    color[0] = rgb[0];
-    color[1] = rgb[1];
-    color[2] = rgb[2];
+    writeConfettiRgb(color, particle.colorIndex, particle.rot, particle.foil);
     color[3] = particle.life <= 0 ? 0 : Math.min(1, particle.life / FADE_SECONDS);
   });
 
@@ -263,7 +310,19 @@ export function ConfettiAtlas({ texture, transforms, colors }: ConfettiAtlasProp
       sprites={SPRITES}
       transforms={transforms}
       colors={colors}
-      colorBlendMode="srcIn"
+      /**
+       * ⚠️ `srcIn`이 아니다. 스펙 §7은 srcIn을 적었지만 실기기에서 색이
+       * 전혀 안 먹고 조각이 순백으로 나온다 — 시뮬레이터 픽셀을 세어 보니
+       * 밝은 픽셀의 99%가 무채색이었다. Skia `drawAtlas`에서 색과 텍셀 중
+       * 어느 쪽이 소스인지가 이 조합에서 뒤집혀, srcIn이 `텍셀 × 색알파`로
+       * 계산되기 때문으로 보인다(= 흰 텍셀 그대로).
+       *
+       * `modulate`는 `src × dst`라 **피연산자 순서와 무관하게** 같은 결과를
+       * 낸다. 텍셀이 흰색이면 개체색이 그대로 나오고, 안티앨리어싱 가장자리
+       * (프리멀티플라이드 부분 알파)도 올바르게 감쇠한다. 순서 문제에
+       * 영향받지 않는다는 게 이 선택의 핵심이다.
+       */
+      colorBlendMode="modulate"
     />
   );
 }
