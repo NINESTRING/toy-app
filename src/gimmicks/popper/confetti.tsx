@@ -160,8 +160,9 @@ export type ConfettiAtlasProps = {
 
 export function useConfetti({ shot, muzzle, canvasSize }: Props): ConfettiAtlasProps {
   /**
-   * 종이 4종을 한 장의 GPU 텍스처로. 색은 Atlas colors가 개체별로 입힌다 —
-   * srcIn이라 스프라이트의 알파만 남기고 색을 통째로 덮는다.
+   * 종이 4종을 한 장의 GPU 텍스처로. 전부 흰색으로 굽고 색은 Atlas colors가
+   * 개체별로 입힌다 — modulate가 텍셀 × 개체색이라 흰 텍셀이 개체색 그대로
+   * 통과한다(`ConfettiAtlas`의 블렌드 주석 참조).
    *
    * 엘리먼트는 모듈 상수다 — `useTexture`가 그리기 이펙트에 넘기는 deps는
    * 세 번째 인자(생략 시 `[]`)뿐이라 identity를 보진 않지만, 매 렌더 새
@@ -309,7 +310,19 @@ export function ConfettiAtlas({ texture, transforms, colors }: ConfettiAtlasProp
       sprites={SPRITES}
       transforms={transforms}
       colors={colors}
-      colorBlendMode="srcIn"
+      /**
+       * ⚠️ `srcIn`이 아니다. 스펙 §7은 srcIn을 적었지만 실기기에서 색이
+       * 전혀 안 먹고 조각이 순백으로 나온다 — 시뮬레이터 픽셀을 세어 보니
+       * 밝은 픽셀의 99%가 무채색이었다. Skia `drawAtlas`에서 색과 텍셀 중
+       * 어느 쪽이 소스인지가 이 조합에서 뒤집혀, srcIn이 `텍셀 × 색알파`로
+       * 계산되기 때문으로 보인다(= 흰 텍셀 그대로).
+       *
+       * `modulate`는 `src × dst`라 **피연산자 순서와 무관하게** 같은 결과를
+       * 낸다. 텍셀이 흰색이면 개체색이 그대로 나오고, 안티앨리어싱 가장자리
+       * (프리멀티플라이드 부분 알파)도 올바르게 감쇠한다. 순서 문제에
+       * 영향받지 않는다는 게 이 선택의 핵심이다.
+       */
+      colorBlendMode="modulate"
     />
   );
 }
