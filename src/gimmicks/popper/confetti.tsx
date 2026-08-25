@@ -20,7 +20,16 @@ import {
 
 import type { SlingShot } from '@/gimmicks/_kinds/sling';
 
-import { CELL, PALETTE, TEXTURE_HEIGHT, TEXTURE_WIDTH, cellX, flutterScale } from './confettiLook';
+import {
+  CELL,
+  FOIL_RATIO,
+  PALETTE,
+  TEXTURE_HEIGHT,
+  TEXTURE_WIDTH,
+  cellX,
+  flutterScale,
+  writeConfettiRgb,
+} from './confettiLook';
 
 /**
  * 색종이 파티클 시스템. (스펙 §7)
@@ -35,6 +44,10 @@ import { CELL, PALETTE, TEXTURE_HEIGHT, TEXTURE_WIDTH, cellX, flutterScale } fro
  * RSXform·색 버퍼의 modifier는 클로저의 shared value가 바뀔 때 다시
  * 도는 매퍼다. 파티클 배열은 제자리 변형이라 그것만으로는 안 깨어나므로,
  * 프레임 콜백이 tick을 증가시켜 매 프레임 갱신을 트리거한다.
+ *
+ * 겉모습(칸 배정·플러터 위상·금박 색)은 `confettiLook.ts`가 소유한다 —
+ * import가 없어 Node로 직접 검증되는 파일이다. 여기 남은 건 물리 적분과
+ * Skia 버퍼 배선이다.
  *
  * 훅(`useConfetti`)과 그리는 컴포넌트(`ConfettiAtlas`)를 나눠 둔 이유:
  * Skia는 `Canvas`의 자식을 별도 react-reconciler 루트에 마운트하므로
@@ -110,11 +123,24 @@ type Particle = {
   rotV: number; // 라디안/s
   scale: number;
   colorIndex: number;
+  /** 1이면 금박 — 회전하며 빛을 스친다. 색 버퍼만 읽는다(물리와 무관). */
+  foil: number;
   life: number; // 남은 초. 0 이하 = 죽음
 };
 
 function makeDeadParticle(): Particle {
-  return { x: 0, y: 0, vx: 0, vy: 0, rot: 0, rotV: 0, scale: 1, colorIndex: 0, life: 0 };
+  return {
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    rot: 0,
+    rotV: 0,
+    scale: 1,
+    colorIndex: 0,
+    foil: 0,
+    life: 0,
+  };
 }
 
 type Props = {
@@ -179,6 +205,7 @@ export function useConfetti({ shot, muzzle, canvasSize }: Props): ConfettiAtlasP
         particle.rotV = (Math.random() - 0.5) * 12;
         particle.scale = 1 + Math.random() * 0.8;
         particle.colorIndex = Math.floor(Math.random() * PALETTE.length);
+        particle.foil = Math.random() < FOIL_RATIO ? 1 : 0;
         particle.life = LIFE_BASE + Math.random() * LIFE_JITTER;
       }
 
@@ -254,15 +281,16 @@ export function useConfetti({ shot, muzzle, canvasSize }: Props): ConfettiAtlasP
     );
   });
 
-  /** 개체 색 + 수명 끝 페이드아웃. SkColor는 [r,g,b,a] Float32Array다. */
+  /**
+   * 개체 색 + 수명 끝 페이드아웃. SkColor는 [r,g,b,a] Float32Array다.
+   * RGB는 `writeConfettiRgb`가 제자리에 채운다 — 금박이면 회전 위상에 따라
+   * 번쩍이고, 무광이면 팔레트 색 그대로다. 알파만 여기서 정한다.
+   */
   const colors = useColorBuffer(POOL_SIZE, (color, index) => {
     'worklet';
     void tick.value;
     const particle = particles.value[index];
-    const rgb = PALETTE[particle.colorIndex];
-    color[0] = rgb[0];
-    color[1] = rgb[1];
-    color[2] = rgb[2];
+    writeConfettiRgb(color, particle.colorIndex, particle.rot, particle.foil);
     color[3] = particle.life <= 0 ? 0 : Math.min(1, particle.life / FADE_SECONDS);
   });
 
