@@ -94,6 +94,33 @@ export const GIMMICKS = [
     },
     component: () => import('./bulb'),
   },
+  {
+    id: 'popper',
+    name: '파티 포퍼',
+    kind: 'sling',
+    /**
+     * 당기는 동안 파워 비례 차징 럼블(연속 엔벨로프), 놓는 순간 펑.
+     *
+     * ⚠️ 미검증 값이다. 키캡·다이얼·전구와 같은 상태 — §10의 Live
+     * Preview 절차는 실기기가 필요하다. fire 후보:
+     *   balloonPop, burst, firecracker, explosion, snap
+     * charge는 "당길수록 팽팽해진다"가 느껴질 때까지 범위를 조정한다.
+     */
+    haptic: {
+      type: 'sling',
+      charge: { minAmplitude: 0.1, maxAmplitude: 0.7, minFrequency: 0.2, maxFrequency: 0.6 },
+      fire: { type: 'preset', name: 'balloonPop' },
+    },
+    config: {
+      /** 파워 1.0에 도달하는 당김 거리(pt). 화면 절반쯤 당기면 풀파워. */
+      maxPull: 160,
+      /** 이 미만에서 놓으면 불발 — 탭 오발 방지. 답답하면 소형 발사로 완화(스펙 §11). */
+      minPower: 0.1,
+      /** 발사각: 수직 위 ±75° — 바닥으로 쏘는 낭비 사이클을 없앤다. */
+      fanDegrees: 150,
+    },
+    component: () => import('./popper'),
+  },
 ] as const satisfies readonly Gimmick[];
 
 /** id로 기믹 찾기. 라우트 파라미터가 문자열로 오므로 검증 겸용. */
@@ -126,5 +153,14 @@ export const BUNDLED_PRESETS: readonly PresetName[] = ALL_GIMMICKS.flatMap((gimm
   const variants: readonly GimmickVariant<HapticSpec>[] = gimmick.variants ?? [];
   const haptics: readonly HapticSpec[] = [gimmick.haptic, ...variants.map((v) => v.haptic)];
 
-  return haptics.flatMap((haptic) => (haptic.type === 'preset' ? [haptic.name] : []));
+  return haptics.flatMap((haptic) => {
+    if (haptic.type === 'preset') {
+      return [haptic.name];
+    }
+    /** sling은 fire 쪽에 프리셋이 숨어 있다 — 안 모으면 첫 펑이 씹힌다(§4 원칙 3). */
+    if (haptic.type === 'sling' && haptic.fire.type === 'preset') {
+      return [haptic.fire.name];
+    }
+    return [];
+  });
 });
