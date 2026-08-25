@@ -41,10 +41,11 @@ const SPAN = Math.sqrt(
 /** 세그먼트 하나의 휴지 길이. */
 export const SEGMENT_LEN = (SPAN * CORD_SLACK) / (NODE_COUNT - 1);
 
+
 /** ⚠️ 물리 상수 전부 실기기 미검증 — 퍼퍼 색종이·다이얼과 같은 상태다. */
 const GRAVITY = 2200; // pt/s²
 const DRAG = 2.6; // /s — 공기저항
-const CONSTRAINT_ITERATIONS = 5;
+const CONSTRAINT_ITERATIONS = 8;
 
 /**
  * 여유가 생긴 구간을 옆으로 밀어내는 가속도(pt/s²).
@@ -74,6 +75,21 @@ const BUCKLE = 50000;
  * 없다. 물리적으로도 채찍 에너지는 꼬리가 넣는 것이라 이쪽이 맞다.
  */
 const BUCKLE_REF_SPEED = 600;
+
+/**
+ * 굽힘 강성. 한 칸 건너뛴 마디(i, i+2) 사이를 이 비율 × 2세그먼트보다 가깝게
+ * 두지 않는다 — 즉 **밀어내기 전용** 제약이다(구간 제약은 당기기 전용).
+ *
+ * 없으면 좌굴력이 앵커 근처 한 마디에 몰려서 줄이 거의 반으로 접힌다(내각
+ * 4도까지 봤다). 실제 줄은 굽힘 강성이 있어서 그렇게 못 접히고, 그 대신
+ * 휘어짐이 길이 전체로 퍼진다 — 그게 채찍 파형이다.
+ *
+ * 등변 두 구간이 내각 θ일 때 (i, i+2) 거리는 2L·sin(θ/2)다. 0.8이면
+ * θ ≈ 106도가 하한이 된다.
+ */
+const BEND_MIN = 0.85;
+/** 굽힘 제약의 최소 간격. `BEND_MIN` 주석 참조. */
+const BEND_SPAN = 2 * SEGMENT_LEN * BEND_MIN;
 
 /** 자유 마디가 전부 이 속력 밑이면 멈춘 것으로 친다. `useCord`의 수면 판정. */
 export const SLEEP_SPEED = 1.5; // pt/s
@@ -183,6 +199,27 @@ export function stepCord(nodes: CordNode[], dt: number, tailX: number, tailY: nu
       a.y += dy * excess * aShare;
       b.x -= dx * excess * bShare;
       b.y -= dy * excess * bShare;
+    }
+
+    /** 굽힘 강성 — 한 칸 건너 마디를 밀어내 날카로운 접힘을 막는다. */
+    for (let i = 0; i < last - 1; i++) {
+      const a = nodes[i];
+      const b = nodes[i + 2];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance >= BEND_SPAN || distance === 0) {
+        continue;
+      }
+      const deficit = (distance - BEND_SPAN) / distance;
+      const aPinned = i === 0;
+      const bPinned = i + 2 === last;
+      const aShare = aPinned ? 0 : bPinned ? 1 : 0.5;
+      const bShare = bPinned ? 0 : aPinned ? 1 : 0.5;
+      a.x += dx * deficit * aShare;
+      a.y += dy * deficit * aShare;
+      b.x -= dx * deficit * bShare;
+      b.y -= dy * deficit * bShare;
     }
   }
 
