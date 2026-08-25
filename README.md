@@ -77,8 +77,6 @@ Release 빌드는 **JS 번들을 바이너리 안에 심는다.** Metro는 빌�
 
 대신 Fast Refresh와 개발 메뉴가 없다. JS를 고치면 다시 빌드해야 한다.
 
-> 무료 Apple 계정으로 서명하면 7일 후 앱이 만료된다. 재설치하면 된다.
-
 Android도 같은 세 가지가 있다:
 
 ```bash
@@ -90,6 +88,60 @@ npm run android:release    # 실기기 단독
 안드로이드는 실기기 확인이 iOS보다 더 중요하다. §5가 지적한 대로 **진동 모터
 편차가 커서** 기기마다 손맛이 다르고, 저가 기기에서는 `LIMITED_SUPPORT`로 떨어져
 폴백 경로를 타게 된다. 갤럭시 상위 기종 하나로 확인한 결과를 전체로 일반화할 수 없다.
+
+### 서명 만료 — 무료 계정의 7일
+
+이 프로젝트는 **무료 Apple 계정**으로 서명한다(팀 `R7NARLC828`, Personal Team).
+무료 계정의 프로비저닝 프로파일은 발급 시각으로부터 **정확히 7일**이고, 지나면
+설치된 앱이 아예 실행되지 않는다. Apple이 건 상한이라 무료인 이상 우회할 방법은
+없다.
+
+만료를 정하는 건 **인증서가 아니라 프로파일**이다. 인증서(`Apple Development:
+…`)는 1년짜리고(현재 것은 2027-08-11 만료) 그동안 멀쩡하지만, 앱을 멈추는 건
+7일짜리 프로파일 쪽이다. "인증서는 살아 있는데 앱이 안 열린다"의 정체가 이것이다.
+
+**함정 — 그냥 다시 빌드하면 7일이 안 늘어난다.** Xcode 자동 서명은 아직 유효한
+프로파일이 있으면 새로 발급하지 않고 **그걸 재사용한다.** 3일 남은 프로파일로
+빌드하면 방금 설치한 앱도 3일 뒤에 죽는다. 카운트다운은 설치 시각이 아니라
+**프로파일 발급 시각**부터 돌기 때문이다. 만료 직전에 재설치해서 하루 벌고 끝나는
+건 대부분 이 함정이다.
+
+**오늘 발급받아 만 7일을 쓰려면 프로파일을 먼저 지운다.** 없으면 Xcode가 빌드할 때
+새로 발급하고, 그 순간부터 7일이 시작된다.
+
+```bash
+# toyapp 프로파일만 지운다 (다른 앱 것은 건드리지 않는다)
+for f in ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*; do
+  security cms -D -i "$f" > /tmp/pp.plist 2>/dev/null || continue
+  case "$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' /tmp/pp.plist)" in
+    *.com.ninestring.toyapp) rm "$f" ;;
+  esac
+done
+
+npm run ios:release
+```
+
+빌드가 끝난 **직후**가 만료 시계의 0초다. 나가서 쓸 계획이라면 나가기 직전에 굽는
+게 하루를 번다.
+
+지금 며칠 남았는지는 이걸로 본다:
+
+```bash
+for f in ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*; do
+  security cms -D -i "$f" > /tmp/pp.plist 2>/dev/null || continue
+  printf '%s  →  %s\n' \
+    "$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' /tmp/pp.plist)" \
+    "$(/usr/libexec/PlistBuddy -c 'Print :ExpirationDate' /tmp/pp.plist)"
+done
+```
+
+프로파일은 Xcode 16부터 `~/Library/Developer/Xcode/UserData/Provisioning Profiles/`에
+있다. 예전 경로(`~/Library/MobileDevice/Provisioning Profiles/`)는 이제 비어 있으므로
+거기를 뒤지면 헛수고다.
+
+**7일을 넘기는 유일한 방법은 유료 Apple Developer Program($99/년)이다.** 가입하면
+같은 명령 그대로 프로파일이 1년짜리로 발급되고, 그때는 인증서 만료일이 상한이 된다.
+기기에 오래 얹어두고 손맛을 관찰할 거라면 이 값을 치는 것 말고 선택지가 없다.
 
 ## 확인 명령
 
