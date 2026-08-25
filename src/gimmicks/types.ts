@@ -92,6 +92,17 @@ export type DetentedConfig = {
   sweepDegrees: number;
   /** 끝에 도달하면 멈출지(노브), 계속 돌지(스피너). */
   clamp: boolean;
+  /**
+   * 카운트를 1 올리는 데 필요한 눈금 수. 기본 1 — 눈금마다 1이다.
+   *
+   * `detentCount`와 같은 값을 주면 "한 바퀴에 1"이 된다(다이얼이 그렇다).
+   * 햅틱은 이 값과 무관하게 눈금마다 그대로 터진다 — 손맛의 단위와 세는
+   * 단위는 다른 것이고, 딸깍을 묶으면 detented가 detented가 아니게 된다.
+   *
+   * 누적은 **부호 있는** 값이라 반 바퀴씩 왕복해서는 안 쌓인다. 자세한
+   * 이유는 `_kinds/detented.tsx`의 `countProgress` 주석에.
+   */
+  detentsPerCount?: number;
 };
 
 /**
@@ -214,7 +225,9 @@ export type GimmickScreenProps<K extends GimmickKind = GimmickKind> = {
    */
   variant: VariantOf<K>;
   /**
-   * 한 번 조작될 때마다(딸깍 1회, 눈금 1칸) 호출된다.
+   * 한 번 조작될 때마다 호출된다. 무엇이 "한 번"인지는 입력 모델이 정한다 —
+   * 보통은 딸깍 1회지만, detented는 `detentsPerCount`만큼 돌 때마다다
+   * (다이얼은 한 바퀴에 1).
    * 카운트를 메모리에 쌓는 용도 — MMKV 저장은 store 쪽에서 디바운스한다. (§5)
    */
   onInteract: () => void;

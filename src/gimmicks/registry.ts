@@ -59,14 +59,20 @@ export const GIMMICKS = [
     config: {
       /**
        * 레퍼런스: Chris Gannon의 Soft Dial (codepen.io/chrisgannon/pen/yLQyeEy).
-       * 원본은 0~270° 클램프 노브지만 우리는 무한 회전이다 — 눈금 점 32개를
-       * 온전한 원에 두고, 한 바퀴 채우면 색이 리셋된다. 원이 닫혀 있으므로
-       * 점 개수와 detent 개수가 같다(부채꼴이었다면 점이 하나 더 많다).
+       * 원본은 0~270° 클램프 노브지만 우리는 무한 회전이다 — 불빛 32개를
+       * 온전한 원에 두고 마커가 계속 돈다. 원이 닫혀 있으므로 불빛 개수와
+       * detent 개수가 같다(부채꼴이었다면 불빛이 하나 더 많다).
        */
       detentCount: 32,
       sweepDegrees: 360,
       /** 무한 회전. 오디오 노브처럼 끝을 만들려면 clamp: true + sweep 270. */
       clamp: false,
+      /**
+       * **`detentCount`와 같은 값이어야 한다** — 그래야 "한 바퀴에 카운트 1"이
+       * 된다. 눈금마다 세면 한 번 휙 돌릴 때 32가 올라서 숫자가 조작 횟수가
+       * 아니라 각도 눈금처럼 읽힌다. 딸깍은 그대로 눈금마다 터진다.
+       */
+      detentsPerCount: 32,
     },
     component: () => import('./dial'),
   },
