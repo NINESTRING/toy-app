@@ -12,76 +12,28 @@ import type { Gimmick, GimmickVariant, HapticSpec } from './types';
  * 첫 스프린트는 Discrete 1개 + Detented 1개만 만든다. (§10) 이 둘이
  * 구조적으로 가장 멀어서, 같은 레지스트리로 굴러가면 나머지는 추가만 하면
  * 된다. 클리커만 5개 만들고 나서 다이얼을 붙이면 그때 다 갈아엎게 된다.
+ * (첫 Discrete였던 클리커는 같은 모델의 키캡이 자리를 대신하게 되어 삭제했다.)
  */
 export const GIMMICKS = [
-  {
-    id: 'clicker',
-    name: '클리커',
-    kind: 'discrete',
-    /**
-     * `snap`을 골랐다.
-     *
-     * ⚠️ 미검증 값이다. §10은 코드를 짜기 전에 Pulsar Live Preview
-     * 플레이그라운드에서 프리셋을 실제로 느껴보고 고르라고 지시하는데,
-     * 그건 실기기가 필요한 작업이라 아직 못 했다.
-     *
-     * 실기기에서 확인한 뒤 교체할 것. 후보(151개 중 클리커 계열):
-     *   snap, keyboardMechanical, keyboardMembrane, latch, plunk,
-     *   trigger, knock, clasp, lock, blip, pip
-     * §4 원칙 1대로 햅틱이 데이터이므로 교체는 아래 한 줄만 바꾸면 끝난다.
-     */
-    haptic: { type: 'preset', name: 'snap' },
-    config: {
-      /**
-       * 릴리스 햅틱 없음 — 단순 클리커는 누를 때만 딸깍한다.
-       * 볼펜 기믹을 추가할 때 여기에 뗄 때의 프리셋을 넣는다.
-       */
-    },
-    component: () => import('./clicker'),
-  },
   {
     id: 'keycap',
     name: '키캡',
     kind: 'discrete',
     /**
-     * 기본 축은 적축. 아래 variants[0]과 같은 값을 둔다 — 저장된 축을 못
-     * 찾았을 때 셸이 여기로 떨어진다.
+     * 축은 적축 하나만 남겼다(갈축·사일런트 삭제). 셸의 축 선택 칩은
+     * variants가 2개 이상일 때만 나타나므로 variants를 지우는 것으로 선택
+     * UI도 함께 사라진다 — 저장된 축 id(tactile/silent)가 남아 있어도 셸이
+     * 합성 기본 변형으로 떨어진다.
+     *
+     * 프리셋은 원래 갈축에 배정했던 `keyboardMechanical`을 적축이 물려받았다.
+     *
+     * ⚠️ 미검증 값이다. §10은 코드를 짜기 전에 Pulsar Live Preview에서
+     * 실제로 느껴보고 고르라고 지시하는데, 그건 실기기가 필요한 작업이라
+     * 아직 못 했다. 다이얼·전구와 같은 상태다. 후보:
+     *   keyboardMechanical, plunk, snap, latch, ratchet, thud
      */
-    haptic: { type: 'preset', name: 'plunk' },
-    /**
-     * 스위치 축 3종.
-     *
-     * 화면에선 손가락이 실제로 내려가지 않으므로 축의 차이는 터치 다운
-     * 순간에 쏘는 파형의 차이로 환원된다. 그래서 `_kinds/discrete.tsx`는
-     * 손댈 필요가 없다.
-     *
-     * 키보드 계열 프리셋은 최상위에 `keyboardMechanical`과
-     * `keyboardMembrane` 둘뿐이다. `keyboardPress`/`keyboardRelease`/
-     * `keyboardTap`은 `Presets.System.Android.*` 아래에 있어서
-     * `presets.ts`가 의도적으로 제외한 플랫폼 시스템 햅틱이다 — 안드로이드
-     * 전용이라 §0의 크로스 플랫폼 기준에 맞지 않는다. 그래서 적축은
-     * 최상위 151개 중에서 골랐다.
-     *
-     * ⚠️ 프리셋 3개 모두 미검증이다. §10은 코드를 짜기 전에 Pulsar Live
-     * Preview에서 실제로 느껴보고 고르라고 지시하는데, 그건 실기기가
-     * 필요한 작업이라 아직 못 했다. 클리커·다이얼과 같은 상태다.
-     *
-     * 실기기에서 확인한 뒤 교체할 것. 후보:
-     *   적축(걸림 없이 쭉)   — plunk, thud, poke, push, chip
-     *   갈축(중간에 걸림)     — keyboardMechanical, snap, latch, ratchet
-     *   사일런트(둔탁·조용)   — keyboardMembrane, thud, pip, wisp
-     *
-     * 갈축이 2단(중간 걸림 + 바닥) 느낌을 못 내면 프리셋 대신
-     * `{ type: 'pattern', pattern: ... }`으로 바꾼다 — `discretePattern`에
-     * 시각차를 둔 트랜지언트 2개를 넣으면 된다. §4 원칙 1대로 햅틱이
-     * 데이터이므로 교체는 이 블록 안에서 끝난다.
-     */
-    variants: [
-      { id: 'linear', name: '적축', haptic: { type: 'preset', name: 'plunk' } },
-      { id: 'tactile', name: '갈축', haptic: { type: 'preset', name: 'keyboardMechanical' } },
-      { id: 'silent', name: '사일런트', haptic: { type: 'preset', name: 'keyboardMembrane' } },
-    ],
-    config: {/** 릴리스 햅틱 없음 — 축의 차이는 누를 때 한 방으로 표현한다. */},
+    haptic: { type: 'preset', name: 'keyboardMechanical' },
+    config: {/** 릴리스 햅틱 없음 — 누를 때 한 방이면 충분하다. */},
     component: () => import('./keycap'),
   },
   {
@@ -105,12 +57,69 @@ export const GIMMICKS = [
       velocityForMaxAmplitude: 360,
     },
     config: {
-      detentCount: 24,
+      /**
+       * 레퍼런스: Chris Gannon의 Soft Dial (codepen.io/chrisgannon/pen/yLQyeEy).
+       * 원본은 0~270° 클램프 노브지만 우리는 무한 회전이다 — 눈금 점 32개를
+       * 온전한 원에 두고, 한 바퀴 채우면 색이 리셋된다. 원이 닫혀 있으므로
+       * 점 개수와 detent 개수가 같다(부채꼴이었다면 점이 하나 더 많다).
+       */
+      detentCount: 32,
       sweepDegrees: 360,
       /** 무한 회전. 오디오 노브처럼 끝을 만들려면 clamp: true + sweep 270. */
       clamp: false,
     },
     component: () => import('./dial'),
+  },
+  {
+    id: 'bulb',
+    name: '전구',
+    kind: 'tug',
+    /**
+     * 풀코드가 임계값을 넘는 순간의 딸깍. 실제 풀체인 스위치의 묵직한
+     * 걸쇠 느낌을 노리고 `latch`를 골랐다.
+     *
+     * ⚠️ 미검증 값이다. 키캡·다이얼과 같은 상태 — §10의 Live
+     * Preview 절차는 실기기가 필요하다. 후보:
+     *   latch, lock, snap, trigger, toggleOn/toggleOff(켜짐·꺼짐 분리 —
+     *   config 확장이 필요해서 후속으로 미뤘다, 스펙 §7)
+     */
+    haptic: { type: 'preset', name: 'latch' },
+    config: {
+      /**
+       * 토글로 인정하는 당김 거리(pt). 레퍼런스는 50px — 손가락 기준으로
+       * 살짝 여유를 줬다. 너무 짧으면 스치기만 해도 켜져서 "당겼다"는
+       * 느낌이 죽는다.
+       */
+      threshold: 60,
+    },
+    component: () => import('./bulb'),
+  },
+  {
+    id: 'popper',
+    name: '파티 포퍼',
+    kind: 'sling',
+    /**
+     * 당기는 동안 파워 비례 차징 럼블(연속 엔벨로프), 놓는 순간 펑.
+     *
+     * ⚠️ 미검증 값이다. 키캡·다이얼·전구와 같은 상태 — §10의 Live
+     * Preview 절차는 실기기가 필요하다. fire 후보:
+     *   balloonPop, burst, firecracker, explosion, snap
+     * charge는 "당길수록 팽팽해진다"가 느껴질 때까지 범위를 조정한다.
+     */
+    haptic: {
+      type: 'sling',
+      charge: { minAmplitude: 0.1, maxAmplitude: 0.7, minFrequency: 0.2, maxFrequency: 0.6 },
+      fire: { type: 'preset', name: 'balloonPop' },
+    },
+    config: {
+      /** 파워 1.0에 도달하는 당김 거리(pt). 화면 절반쯤 당기면 풀파워. */
+      maxPull: 160,
+      /** 이 미만에서 놓으면 불발 — 탭 오발 방지. 답답하면 소형 발사로 완화(스펙 §11). */
+      minPower: 0.1,
+      /** 발사각: 수직 위 ±75° — 바닥으로 쏘는 낭비 사이클을 없앤다. */
+      fanDegrees: 150,
+    },
+    component: () => import('./popper'),
   },
 ] as const satisfies readonly Gimmick[];
 
@@ -126,6 +135,28 @@ export function findGimmick(id: string | undefined): Gimmick | undefined {
  * 타임에 보장하므로, 이 대입은 그 보장을 통과시키는 것뿐이다.
  */
 const ALL_GIMMICKS: readonly Gimmick[] = GIMMICKS;
+
+/**
+ * 하나의 햅틱 스펙이 참조하는 프리셋. sling처럼 프리셋을 중첩해 갖는
+ * 타입이 생겨도 여기서 걸린다 — `never` 대입이 새 멤버를 컴파일 에러로
+ * 만들기 때문이다. §4 원칙 3(번들 기믹의 프리셋은 전부 preload)이 조용히
+ * 깨지는 걸 막는 자리다.
+ */
+function presetsOf(haptic: HapticSpec): readonly PresetName[] {
+  switch (haptic.type) {
+    case 'preset':
+      return [haptic.name];
+    case 'pattern':
+    case 'realtime':
+      return [];
+    case 'sling':
+      return presetsOf(haptic.fire);
+    default: {
+      const exhaustive: never = haptic;
+      return exhaustive;
+    }
+  }
+}
 
 /**
  * 번들에 포함된 기믹이 쓰는 프리셋. 앱 시작 시 preload한다. (§4 원칙 3)
@@ -144,5 +175,6 @@ export const BUNDLED_PRESETS: readonly PresetName[] = ALL_GIMMICKS.flatMap((gimm
   const variants: readonly GimmickVariant<HapticSpec>[] = gimmick.variants ?? [];
   const haptics: readonly HapticSpec[] = [gimmick.haptic, ...variants.map((v) => v.haptic)];
 
-  return haptics.flatMap((haptic) => (haptic.type === 'preset' ? [haptic.name] : []));
+  /** sling은 fire 쪽에 프리셋이 숨어 있다 — 안 모으면 첫 펑이 씹힌다(§4 원칙 3). */
+  return haptics.flatMap(presetsOf);
 });

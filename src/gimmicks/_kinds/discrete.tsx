@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS, useSharedValue, type SharedValue } from 'react-native-reanimated';
-import { usePatternComposer } from 'react-native-pulsar';
 
-import { resolvePreset } from '@/haptics/presets';
 import { useThrottledHaptic } from '@/haptics/useThrottledHaptic';
 import type { DiscreteConfig, PatternHaptic, PresetHaptic } from '@/gimmicks/types';
+
+import { useHapticFire } from './useHapticFire';
 
 /**
  * Discrete 입력 모델. (§4)
@@ -28,31 +28,6 @@ type Props = {
   onInteract: () => void;
   children: (state: DiscreteRenderState) => React.ReactNode;
 };
-
-/**
- * 햅틱 스펙을 워크릿 호출 가능한 함수 하나로 만든다.
- *
- * `usePatternComposer`는 훅이라 조건부로 호출할 수 없으므로, 프리셋인
- * 경우에도 pattern을 undefined로 넘겨 항상 호출한다(Pulsar가 undefined면
- * 파싱을 건너뛴다).
- */
-function useHapticFire(spec: PresetHaptic | PatternHaptic | undefined): () => void {
-  const patternComposer = usePatternComposer(spec?.type === 'pattern' ? spec.pattern : undefined);
-  const play = patternComposer.play;
-
-  return React.useMemo(() => {
-    if (!spec) {
-      // 아무것도 안 쏘는 워크릿. 호출부에서 분기하지 않게 해준다.
-      return () => {
-        'worklet';
-      };
-    }
-    if (spec.type === 'pattern') {
-      return play;
-    }
-    return resolvePreset(spec.name);
-  }, [spec, play]);
-}
 
 export function DiscreteGimmick({ haptic, config, onInteract, children }: Props) {
   const pressed = useSharedValue(0);

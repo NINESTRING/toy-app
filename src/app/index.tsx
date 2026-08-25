@@ -67,6 +67,8 @@ function GimmickCard({ gimmick }: { gimmick: Gimmick }) {
 const KIND_LABELS: Record<Gimmick['kind'], string> = {
   discrete: '누르기',
   detented: '돌리기',
+  tug: '당기기',
+  sling: '쏘기',
 };
 
 const THEME_ICONS = {

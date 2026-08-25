@@ -119,7 +119,7 @@ className API가 같아서 나중에 갈아타는 건 어렵지 않다.
 
 ## 4. 기믹 아키텍처
 
-### 입력 모델 4종
+### 입력 모델 5종
 
 기믹은 **생김새가 아니라 입력 모델로 분류한다.** 다이얼과 슬라이더는 생긴 게 달라도
 코드상 같은 종류고, 클리커와 뽁뽁이는 둘 다 "누른다"지만 구조가 완전히 다르다.
@@ -128,8 +128,17 @@ className API가 같아서 나중에 갈아타는 건 어렵지 않다.
 |---|---|---|---|
 | **Discrete** | 클리커, 토글, 볼펜 | 터치 다운 1회 | `Presets.*()` |
 | **Detented** | 다이얼, 슬라이더, 래칫 | 눈금 넘을 때마다 | `useRealtimeComposer` |
+| **Tug** | 전구 풀코드, 레버 | 당김이 임계값을 넘는 순간 1회 | `Presets.*()` |
+| **Sling** | 파티 포퍼, 새총 | 릴리스 순간 1회 + 당기는 동안 연속 변조 | `useRealtimeComposer` + `Presets.*()` |
 | **Grid** | 뽁뽁이, 키캡 패드 | 셀별, 멀티터치 | `Gesture.Manual` |
 | **Physics** | 스피너, 구슬, 진자 | 속도/충돌 임계값 | 워크릿 + `set()` |
+
+Tug는 처음 4종에 없었고 전구(풀코드) 기믹을 만들며 추가됐다 — 드래그 **거리**가
+트리거라 discrete(터치 다운)와도 detented(눈금)와도 다르다. 놓아야 재장전되므로
+한 번의 당김 사이클에 토글은 1회다.
+
+Sling도 마찬가지로 파티 포퍼를 만들며 추가됐다 — 릴리스가 트리거이고 드래그가
+각도·파워 payload를 만들어서 tug(당김 도중 임계값)와 다르다.
 
 Detented / Physics는 `useRealtimeComposer`의 `set(진폭, 주파수)`로
 드래그 속도에 따라 진동 세기를 실시간 변조한다. 다이얼을 천천히 돌릴 때와
@@ -174,10 +183,14 @@ src/
     _kinds/               # 입력 모델별 공통 로직
       discrete.tsx
       detented.tsx
+      tug.tsx
+      sling.tsx
       grid.tsx
       physics.tsx
-    clicker/
+    keycap/
     dial/
+    bulb/
+    popper/
     bubblewrap/
   haptics/                # 엔진 싱글톤, 폴백 로직
   audio/                  # 플레이어 풀

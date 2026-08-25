@@ -17,8 +17,12 @@ import type { PresetName } from '@/haptics/presets';
 /**
  * 햅틱은 코드가 아니라 데이터다. 기믹 정의가 순수 데이터로 유지되면
  * 나중에 서버에서 내려받을 수 있다.
+ *
+ * 앞의 셋이 전송 방식 원시형(프리셋 / 패턴 / 실시간)인 것과 달리
+ * `SlingHaptic`은 그 원시형을 품는 복합형이라는 게 의도된 비대칭이다.
+ * 복합형이 하나 더 생기면 이 유니온을 원시형과 복합형으로 쪼개는 게 맞다.
  */
-export type HapticSpec = PresetHaptic | PatternHaptic | RealtimeHaptic;
+export type HapticSpec = PresetHaptic | PatternHaptic | RealtimeHaptic | SlingHaptic;
 
 /** Pulsar 프리셋 이름. 151개면 웬만한 기믹은 커스텀 패턴 없이 커버된다. (§10) */
 export type PresetHaptic = {
@@ -63,6 +67,17 @@ export type DiscreteConfig = {
   releaseHaptic?: PresetHaptic | PatternHaptic;
 };
 
+/**
+ * Tug — 전구 풀코드, 레버. 당김이 임계값을 넘는 순간 1회. (§4)
+ *
+ * discrete와 다른 점은 트리거가 터치 다운이 아니라 **드래그 거리**라는 것.
+ * 놓아야 재장전되므로 한 번의 당김 사이클에 토글은 1회다.
+ */
+export type TugConfig = {
+  /** 토글로 인정하는 당김 거리(pt). 잡은 지점 기준 유클리드 거리, 방향 무관. */
+  threshold: number;
+};
+
 /** Detented — 다이얼, 슬라이더, 래칫. 눈금 넘을 때마다. (§4) */
 export type DetentedConfig = {
   /** `sweepDegrees` 구간을 몇 눈금으로 나눌지. */
@@ -77,11 +92,47 @@ export type DetentedConfig = {
 };
 
 /**
+ * Sling — 파티 포퍼, 새총. 당겨서 조준하고 놓는 순간 발사. (§4)
+ *
+ * tug와 다른 점: 트리거가 릴리스이고, 드래그가 각도·파워라는 연속
+ * payload를 만든다. tug는 당김 도중 임계값 통과가 트리거고 릴리스는
+ * 재장전일 뿐이다.
+ */
+export type SlingConfig = {
+  /** 파워 1.0에 도달하는 당김 거리(pt). */
+  maxPull: number;
+  /** 이 파워(0~1) 미만에서 놓으면 불발 — 탭이 오발되지 않는다. */
+  minPower: number;
+  /** 발사각 허용 부채꼴(도). 수직 위를 중심으로 ±(fanDegrees/2)로 클램프. */
+  fanDegrees: number;
+};
+
+/**
+ * 차징 럼블 + 발사 한 방. sling 전용 복합 햅틱.
+ *
+ * 당기는 동안은 연속 엔벨로프(`useRealtimeComposer`의 `set`)를 파워로
+ * 변조하고, 릴리스 순간 단발을 쏜다. 단발(트랜지언트)과 연속(엔벨로프)은
+ * 다른 채널이라 서로 충돌하지 않는다.
+ */
+export type SlingHaptic = {
+  type: 'sling';
+  /** 당기는 동안의 연속 엔벨로프. 파워 0→1로 보간한다. */
+  charge: {
+    minAmplitude: number;
+    maxAmplitude: number;
+    /** 파워가 차면 주파수도 올라간다 — 세지면서 날카로워지는 것. */
+    minFrequency: number;
+    maxFrequency: number;
+  };
+  /** 릴리스 순간 한 방. */
+  fire: PresetHaptic | PatternHaptic;
+};
+
+/**
  * 구현된 입력 모델 → 설정 타입.
  *
- * §4는 입력 모델 4종(discrete / detented / grid / physics)을 정의하지만,
- * 첫 스프린트는 구조적으로 가장 먼 두 개만 만든다(§10). grid / physics를
- * 추가할 때 할 일:
+ * §4가 정의한 입력 모델(discrete / detented / tug / grid / physics) 중
+ * grid / physics는 아직 없다. 추가할 때 할 일:
  *   1. 여기에 `grid: { config: GridConfig; haptic: ... }` 한 줄 추가
  *   2. `_kinds/grid.tsx`에 렌더러 추가
  *   3. `KIND_RENDERERS`에 매핑 추가
@@ -98,6 +149,16 @@ type KindSpec = {
     /** 눈금마다 속도에 따라 세기가 변해야 하므로 실시간 변조 전용. */
     haptic: RealtimeHaptic;
   };
+  tug: {
+    config: TugConfig;
+    /** 임계값 통과 순간 한 방 — discrete와 같은 단발 계열. */
+    haptic: PresetHaptic | PatternHaptic;
+  };
+  sling: {
+    config: SlingConfig;
+    /** 차징(연속) + 발사(단발) 복합. 이 kind 전용 타입이다. */
+    haptic: SlingHaptic;
+  };
 };
 
 /** 구현된 입력 모델. */
@@ -113,16 +174,16 @@ export type PlannedGimmickKind = GimmickKind | 'grid' | 'physics';
 /**
  * 하나의 기믹이 갖는 손맛 변형.
  *
- * 키캡의 스위치 축(적축·갈축·사일런트)처럼 "같은 물건인데 손맛이 다른" 것을
- * 표현한다. 키캡은 클리커와 같은 discrete 모델이라 껍데기만 바꾸면 갤러리에
- * 사실상 같은 기믹이 둘 서게 되는데, 차별점을 손맛에 두는 게 §0("햅틱이 곧
- * 제품")에 맞는 답이다.
+ * 키보드 스위치 축(적축·갈축·사일런트)처럼 "같은 물건인데 손맛이 다른" 것을
+ * 표현한다. 차별점을 손맛에 두는 게 §0("햅틱이 곧 제품")에 맞는 답이다.
+ * (첫 사용처였던 키캡은 적축만 남기면서 지금은 variants를 쓰지 않는다 —
+ * 셸의 선택 UI는 variants가 2개 이상일 때만 나타난다.)
  *
  * 햅틱 타입을 파라미터로 받으므로 kind별 제약이 그대로 유지된다 — detented
  * 기믹에 variants를 달면 RealtimeHaptic만 들어간다.
  *
  * 색이나 사운드는 여기 넣지 않는다. §4 원칙 1이 데이터로 규정한 건 햅틱이고,
- * 시각 정보는 기믹 컴포넌트가 자기 것으로 갖는다(클리커가 자기 색을
+ * 시각 정보는 기믹 컴포넌트가 자기 것으로 갖는다(키캡이 자기 팔레트를
  * 컴포넌트에 갖고 있는 것과 같은 자리다).
  */
 export type GimmickVariant<H> = {
