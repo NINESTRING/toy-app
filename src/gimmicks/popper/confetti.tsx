@@ -1,5 +1,8 @@
 import {
   Atlas,
+  Circle,
+  Group,
+  Path,
   Rect,
   Skia,
   useColorBuffer,
@@ -16,6 +19,8 @@ import {
 } from 'react-native-reanimated';
 
 import type { SlingShot } from '@/gimmicks/_kinds/sling';
+
+import { CELL, PALETTE, TEXTURE_HEIGHT, TEXTURE_WIDTH, cellX, flutterScale } from './confettiLook';
 
 /**
  * 색종이 파티클 시스템. (스펙 §7)
@@ -40,12 +45,8 @@ import type { SlingShot } from '@/gimmicks/_kinds/sling';
 
 const POOL_SIZE = 256;
 
-/** 스프라이트(직사각 색종이 조각) 원본 크기. 개체 스케일이 곱해진다. */
-const SPRITE_W = 6;
-const SPRITE_H = 10;
-
 /** `useTexture`의 deps에 들어가므로 반드시 모듈 상수 — 인라인 리터럴이면 발사마다 텍스처를 새로 굽는다. */
-const SPRITE_SIZE = { width: SPRITE_W, height: SPRITE_H };
+const TEXTURE_SIZE = { width: TEXTURE_WIDTH, height: TEXTURE_HEIGHT };
 
 /** 발사 1회당 개수: 40 + 80 × power. (스펙 §7) */
 const COUNT_BASE = 40;
@@ -63,21 +64,42 @@ const FADE_SECONDS = 0.6; // 수명 끝 페이드아웃 구간
 
 const DEG2RAD = Math.PI / 180;
 
-/**
- * 축제 6색 — 고깔과 같은 계열(스펙 §7). 레퍼런스의 전면 랜덤 RGB는 탁한
- * 색이 절반이라 버렸다. SkColor(Float32Array)에 바로 쓰도록 0~1 RGB.
- */
-const PALETTE: readonly (readonly [number, number, number])[] = [
-  [1.0, 0.42, 0.42], // 코랄 #ff6b6b
-  [1.0, 0.85, 0.24], // 옐로 #ffd93d
-  [0.31, 0.8, 0.77], // 민트 #4ecdc4
-  [0.27, 0.67, 0.95], // 스카이 #45aaf2
-  [0.65, 0.37, 0.92], // 바이올렛 #a55eea
-  [0.99, 0.47, 0.66], // 핑크 #fd79a8
-];
+/** 마름모(칸 3)의 경로. 정적이므로 모듈 상수 — 키캡·고깔과 같은 패턴. */
+const DIAMOND_PATH = Skia.PathBuilder.Make()
+  .moveTo(CELL * 3 + 6, 2)
+  .lineTo(CELL * 3 + 10, 6)
+  .lineTo(CELL * 3 + 6, 10)
+  .lineTo(CELL * 3 + 2, 6)
+  .close()
+  .detach();
 
-/** Atlas의 스프라이트 소스 — 전 개체가 같은 조각을 쓴다. */
-const SPRITES = new Array(POOL_SIZE).fill(Skia.XYWHRect(0, 0, SPRITE_W, SPRITE_H));
+/**
+ * 시트에 구울 종이 4종. 전부 흰색이다 — 색은 Atlas colors가 개체별로 입힌다.
+ *
+ * **모든 모양은 칸 경계에서 0.5pt 안쪽에 있다.** 칸이 가로로 붙어 있어서
+ * 경계에 닿은 픽셀은 겹선형 필터링에서 이웃 칸 색을 빨아들인다. 리본이
+ * 3×12가 아니라 3×11인 게 그 이유다.
+ */
+const CONFETTI_SHEET = (
+  <Group>
+    {/* 0 — 직사각. 개정 전 조각과 같은 6×10, 기존 손맛의 기준점이다. */}
+    <Rect x={3} y={1} width={6} height={10} color="white" />
+    {/* 1 — 리본. */}
+    <Rect x={CELL + 4.5} y={0.5} width={3} height={11} color="white" />
+    {/* 2 — 원형. */}
+    <Circle cx={CELL * 2 + 6} cy={6} r={4.5} color="white" />
+    {/* 3 — 마름모. */}
+    <Path path={DIAMOND_PATH} color="white" />
+  </Group>
+);
+
+/**
+ * 슬롯마다 자기 칸을 가리킨다. `Atlas`의 `sprites`는 워크릿 버퍼가 아니라
+ * 정적 배열이라 이 배정은 앱 수명 내내 고정이다 — `cellX` 주석 참조.
+ */
+const SPRITES = Array.from({ length: POOL_SIZE }, (_, slot) =>
+  Skia.XYWHRect(cellX(slot), 0, CELL, CELL)
+);
 
 type Particle = {
   x: number;
@@ -112,21 +134,17 @@ export type ConfettiAtlasProps = {
 
 export function useConfetti({ shot, muzzle, canvasSize }: Props): ConfettiAtlasProps {
   /**
-   * 흰 조각 하나를 GPU 텍스처로. 색은 Atlas colors가 개체별로 입힌다 —
+   * 종이 4종을 한 장의 GPU 텍스처로. 색은 Atlas colors가 개체별로 입힌다 —
    * srcIn이라 스프라이트의 알파만 남기고 색을 통째로 덮는다.
    *
-   * 엘리먼트는 인라인이어도 된다 — `useTexture`가 그리기 이펙트에 넘기는
-   * deps는 세 번째 인자(생략 시 `[]`)뿐이라 엘리먼트 identity는 안 본다.
-   * 반면 size는 `usePictureAsTexture`의 deps에 그대로 들어가므로 상수여야 한다.
+   * 엘리먼트는 모듈 상수다 — `useTexture`가 그리기 이펙트에 넘기는 deps는
+   * 세 번째 인자(생략 시 `[]`)뿐이라 identity를 보진 않지만, 매 렌더 새
+   * 엘리먼트를 만들 이유도 없다. 반면 size는 `usePictureAsTexture`의 deps에
+   * 그대로 들어가므로 반드시 상수여야 한다.
    */
-  const texture = useTexture(
-    <Rect x={0} y={0} width={SPRITE_W} height={SPRITE_H} color="white" />,
-    SPRITE_SIZE
-  );
+  const texture = useTexture(CONFETTI_SHEET, TEXTURE_SIZE);
 
-  const particles = useSharedValue<Particle[]>(
-    Array.from({ length: POOL_SIZE }, makeDeadParticle)
-  );
+  const particles = useSharedValue<Particle[]>(Array.from({ length: POOL_SIZE }, makeDeadParticle));
   /** 링버퍼 커서 — 다음 스폰이 덮어쓸 슬롯. */
   const cursor = useSharedValue(0);
   /** 살아있는 개수. 0이면 프레임 콜백이 일찍 반환한다(스펙 §7). */
@@ -222,17 +240,17 @@ export function useConfetti({ shot, muzzle, canvasSize }: Props): ConfettiAtlasP
       xform.set(0, 0, 0, 0); // 스케일 0 — 그려지지 않는다
       return;
     }
-    const flutter = 0.75 + 0.25 * Math.sin(particle.rot * 3);
+    const flutter = flutterScale(particle.rot);
     const scale = particle.scale * flutter;
     const scos = Math.cos(particle.rot) * scale;
     const ssin = Math.sin(particle.rot) * scale;
-    const cx = SPRITE_W / 2;
-    const cy = SPRITE_H / 2;
+    /** 칸이 정사각이라 중심 보정이 모양과 무관하게 하나다(confettiLook의 CELL 주석). */
+    const center = CELL / 2;
     xform.set(
       scos,
       ssin,
-      particle.x - (scos * cx - ssin * cy),
-      particle.y - (ssin * cx + scos * cy)
+      particle.x - (scos * center - ssin * center),
+      particle.y - (ssin * center + scos * center)
     );
   });
 
