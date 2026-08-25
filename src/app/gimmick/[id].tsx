@@ -1,8 +1,9 @@
 import { useKeepAwake } from 'expo-keep-awake';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { RotateCcwIcon } from 'lucide-react-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { ChevronLeftIcon, RotateCcwIcon } from 'lucide-react-native';
 import * as React from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
@@ -16,7 +17,7 @@ import { useGimmickCount, useGimmickStore, useGimmickVariantId } from '@/store/g
 /**
  * 기믹 화면.
  *
- * 이 파일은 앱 셸에 속한다(헤더, 카운트, 리셋 버튼) — 그래서 `className`을
+ * 이 파일은 앱 셸에 속한다(뒤로가기·카운트·리셋 오버레이) — 그래서 `className`을
  * 쓴다. 실제 기믹은 아래 `<Body>`로 lazy 로드되고, 그 안쪽에서는 §1 규칙대로
  * `className`이 등장하지 않는다.
  */
@@ -51,7 +52,7 @@ const DEFAULT_VARIANT_ID = 'default';
  * 기믹의 변형 목록. 없으면 `haptic` 하나로 단일 변형을 합성한다.
  *
  * 이렇게 해두면 기믹 컴포넌트가 분기 없이 항상 `variant.haptic`만 보게 되고,
- * 변형 개념을 모르는 기존 기믹(클리커·다이얼)도 그대로 동작한다.
+ * 변형 개념을 모르는 기존 기믹(다이얼·전구)도 그대로 동작한다.
  */
 function variantsOf(gimmick: Gimmick): readonly GimmickVariant<HapticSpec>[] {
   /**
@@ -66,6 +67,8 @@ function variantsOf(gimmick: Gimmick): readonly GimmickVariant<HapticSpec>[] {
 }
 
 function GimmickView({ gimmick }: { gimmick: Gimmick }) {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const hydrate = useGimmickStore((state) => state.hydrate);
   const interact = useGimmickStore((state) => state.interact);
   const reset = useGimmickStore((state) => state.reset);
@@ -97,6 +100,18 @@ function GimmickView({ gimmick }: { gimmick: Gimmick }) {
   }, [reset, gimmick.id]);
 
   /**
+   * 딥링크·콜드 스타트로 이 화면에 바로 들어오면 뒤로 갈 스택이 없다.
+   * 그때는 back 대신 갤러리로 치환한다 — 안 그러면 GO_BACK이 버려진다.
+   */
+  const onBack = React.useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/');
+    }
+  }, [router]);
+
+  /**
    * §4 원칙 2: `component`는 반드시 lazy. 기믹 30개 + Skia 씬이면 초기
    * 번들이 터진다. 진입한 지금 로드한다.
    *
@@ -113,22 +128,16 @@ function GimmickView({ gimmick }: { gimmick: Gimmick }) {
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: gimmick.name,
-          headerRight: () => (
-            <Button onPressIn={onReset} size="icon" variant="ghost" className="ios:size-9 web:mx-4">
-              {/* §5: 리셋 버튼 필수 — 다 터진 뽁뽁이는 쓸모가 없다. */}
-              <Icon as={RotateCcwIcon} className="size-5" />
-            </Button>
-          ),
-        }}
-      />
+      {/*
+        헤더 없음 — 기믹이 상태바 아래까지 화면 전체를 배경으로 소유한다.
+        뒤로가기·리셋은 아래 오버레이의 미니멀 아이콘 버튼이 대신한다.
+      */}
+      <Stack.Screen options={{ title: gimmick.name, headerShown: false }} />
       {/*
         기믹이 콘텐츠 영역 전체를 차지하고 셸 크롬이 그 위에 뜬다.
 
         키캡처럼 배경을 소유하는 기믹이 화면을 가득 채울 수 있어야 하기 때문이다.
-        기믹마다 플래그를 두는 대신 모든 기믹에 같은 모델을 적용한다 — 클리커·
+        기믹마다 플래그를 두는 대신 모든 기믹에 같은 모델을 적용한다 —
         다이얼은 컨테이너가 `flex: 1`로 가운데 정렬하므로 보이는 결과가 같다.
       */}
       <View className="flex-1">
@@ -141,16 +150,42 @@ function GimmickView({ gimmick }: { gimmick: Gimmick }) {
           가져가고 나머지는 아래 기믹으로 통과한다 — 배경 아무 데나 눌러도
           딸깍하는 게 피젯 토이에 맞다.
         */}
-        <View pointerEvents="box-none" className="absolute inset-0 justify-between p-4">
-          <View pointerEvents="box-none">
-            {capability.needsFallback ? <HapticFallbackNotice /> : null}
+        <View
+          pointerEvents="box-none"
+          className="absolute inset-0 justify-between"
+          style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}>
+          {/*
+            상단 한 줄: 뒤로가기 · 카운트 · 리셋. 헤더가 없어졌으므로 여기가
+            셸 크롬의 전부다. 양끝 버튼이 같은 크기라 카운트가 정중앙에 온다.
+          */}
+          <View
+            pointerEvents="box-none"
+            className="flex-row items-center justify-between px-4 pt-2">
+            <Button onPressIn={onBack} size="icon" variant="ghost" className="rounded-full">
+              <Icon as={ChevronLeftIcon} className="size-6" />
+            </Button>
+
+            {/*
+              기믹 배경 위에 얹히므로 알약 배경을 준다. 키캡의 파란 배경에
+              회색 글씨만 있으면 안 읽힌다.
+            */}
+            <Text
+              pointerEvents="none"
+              className="text-muted-foreground bg-muted rounded-full px-2.5 py-1 font-mono text-sm">
+              {count.toLocaleString()}
+            </Text>
+
+            <Button onPressIn={onReset} size="icon" variant="ghost" className="rounded-full">
+              {/* §5: 리셋 버튼 필수 — 다 터진 뽁뽁이는 쓸모가 없다. */}
+              <Icon as={RotateCcwIcon} className="size-5" />
+            </Button>
           </View>
 
-          <View pointerEvents="box-none" className="items-center gap-3">
+          <View pointerEvents="box-none" className="items-center gap-3 p-4">
             {/*
               축 칩. 셸에 있으므로 `className`을 쓴다 — §1이 금지한 건 기믹 화면
               내부이고, 여기는 매 프레임 스타일이 바뀌는 구간이 아니다. 변형이
-              2개 이상일 때만 나타나므로 클리커·다이얼 화면은 그대로다.
+              2개 이상일 때만 나타나므로 다이얼·전구 화면은 그대로다.
             */}
             {variants.length > 1 ? (
               <View className="flex-row gap-2">
@@ -166,15 +201,7 @@ function GimmickView({ gimmick }: { gimmick: Gimmick }) {
               </View>
             ) : null}
 
-            {/*
-              기믹 배경 위에 얹히므로 알약 배경을 준다. 키캡의 파란 배경에
-              회색 글씨만 있으면 안 읽힌다.
-            */}
-            <Text
-              pointerEvents="none"
-              className="text-muted-foreground bg-muted rounded-full px-2.5 py-1 font-mono text-sm">
-              {count.toLocaleString()}
-            </Text>
+            {capability.needsFallback ? <HapticFallbackNotice /> : null}
           </View>
         </View>
       </View>

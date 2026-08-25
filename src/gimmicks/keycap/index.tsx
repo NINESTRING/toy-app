@@ -11,10 +11,8 @@ import {
   vec,
   type SkSize,
 } from '@shopify/react-native-skia';
-import * as React from 'react';
 import { View, type TextStyle, type ViewStyle } from 'react-native';
 import Animated, {
-  interpolateColor,
   useAnimatedReaction,
   useAnimatedStyle,
   useDerivedValue,
@@ -25,8 +23,6 @@ import Animated, {
 
 import { DiscreteGimmick } from '@/gimmicks/_kinds/discrete';
 import type { GimmickScreenProps } from '@/gimmicks/types';
-
-import { paletteFor, type KeycapPalette } from './palette';
 
 /**
  * 키캡 — Discrete 입력 모델. (§4)
@@ -75,8 +71,8 @@ const PRESS_DEPTH = 7;
  * 않으니 이 그림자도 고정이다.
  *
  * 캡 그림자는 우물 안쪽에 떨어지는 작은 그림자다. 하우징이 거의 검정이라
- * 적축에선 잘 안 보이지만, 상판이 밝은 사일런트에선 캡이 떠 있는 느낌을
- * 만든다. 이쪽만 눌림에 따라 짧아진다.
+ * 잘 안 보이지만, 캡이 우물 위에 떠 있는 느낌을 만든다. 이쪽만 눌림에
+ * 따라 짧아진다.
  */
 const SHADOW_DX = -14;
 const HOUSING_SHADOW_DY = 20;
@@ -86,14 +82,33 @@ const CAP_SHADOW_BLUR = 12;
 const SHADOW_COLOR = 'rgba(0, 0, 0, 0.42)';
 
 /**
- * 뗄 때의 복귀 시간. 클리커와 같은 값이다 — 누를 때는 0ms로 즉시 내려가고
- * 뗄 때만 여운을 준다. 누를 때 애니메이션을 넣으면 그게 체감 지연으로
- * 읽힌다. (§0)
+ * 뗄 때의 복귀 시간. 누를 때는 0ms로 즉시 내려가고 뗄 때만 여운을 준다.
+ * 누를 때 애니메이션을 넣으면 그게 체감 지연으로 읽힌다. (§0)
  */
 const RELEASE_MS = 90;
 
-/** 축을 바꿀 때 배경색이 넘어가는 시간. */
-const BACKGROUND_FADE_MS = 220;
+/**
+ * 팔레트 — 적축(레퍼런스 이미지의 파랑/노랑)만 남았다. 갈축·사일런트를
+ * 지우면서 축별 팔레트 맵(palette.ts)도 걷어냈다. 색은 키캡 전용 시각
+ * 정보라 컴포넌트가 자기 것으로 갖는다 — §4 원칙 1이 데이터로 규정한 건
+ * 햅틱뿐이다.
+ */
+const PALETTE = {
+  /** 배경 그라디언트. 위 → 아래 */
+  backgroundTop: '#1a5ce0',
+  backgroundBottom: '#0a2f9c',
+  /** 키캡이 박힌 하우징. 레퍼런스의 검은 타일 */
+  housing: '#0b1020',
+  /** 키캡 상판 */
+  capTop: '#f2cf1f',
+  /** 키캡 측면. 상판보다 어두워야 두께로 읽힌다 */
+  capSkirt: '#c39f08',
+  /** 라벨 글자색 */
+  label: '#1a1a1a',
+};
+
+/** 배경 그라디언트 색. 축이 하나뿐이라 고정이다. */
+const BACKGROUND_COLORS = [PALETTE.backgroundTop, PALETTE.backgroundBottom];
 
 /** Skia에 넘길 도형은 미리 만들어둔다 — 워크릿에서 Skia 객체를 만들지 않는다. */
 const HOUSING_BOX = rrect(
@@ -104,65 +119,20 @@ const HOUSING_BOX = rrect(
 const SKIRT_BOX = rrect(rect(SKIRT.x, SKIRT.y, SKIRT.size, SKIRT.size), SKIRT.radius, SKIRT.radius);
 
 export default function Keycap({ gimmick, variant, onInteract }: GimmickScreenProps<'discrete'>) {
-  const { palettes, stops, activeIndex } = useVariantPalettes(gimmick, variant);
-
   return (
     <View style={CONTAINER}>
       <DiscreteGimmick haptic={variant.haptic} config={gimmick.config} onInteract={onInteract}>
-        {({ pressed }) => (
-          <KeycapBody
-            pressed={pressed}
-            palettes={palettes}
-            stops={stops}
-            activeIndex={activeIndex}
-          />
-        )}
+        {({ pressed }) => <KeycapBody pressed={pressed} />}
       </DiscreteGimmick>
     </View>
   );
 }
 
-/**
- * 축 목록에서 보간용 팔레트 배열을 만든다.
- *
- * 색 전환을 "현재 축 인덱스"라는 숫자 하나로 다루면, 축이 몇 개든
- * `interpolateColor` 한 번으로 끝난다.
- */
-function useVariantPalettes(
-  gimmick: GimmickScreenProps<'discrete'>['gimmick'],
-  variant: GimmickScreenProps<'discrete'>['variant']
-) {
-  return React.useMemo(() => {
-    const ids = (gimmick.variants ?? []).map((candidate) => candidate.id);
-    const list = ids.length > 0 ? ids : [variant.id];
-    const palettes = list.map(paletteFor);
-
-    /**
-     * `interpolateColor`는 입력 구간이 2개 이상이어야 한다. 변형이 하나뿐인
-     * 경우(또는 §7 OTA로 축이 빠진 경우) 같은 팔레트를 한 번 더 넣어
-     * "변하지 않는 보간"으로 만든다.
-     */
-    if (palettes.length === 1) {
-      palettes.push(palettes[0]);
-    }
-
-    return {
-      palettes,
-      stops: palettes.map((_, index) => index),
-      /** 저장된 축이 목록에 없으면 첫 축으로 떨어진다. */
-      activeIndex: Math.max(0, list.indexOf(variant.id)),
-    };
-  }, [gimmick.variants, variant.id]);
-}
-
 type BodyProps = {
   pressed: SharedValue<number>;
-  palettes: KeycapPalette[];
-  stops: number[];
-  activeIndex: number;
 };
 
-function KeycapBody({ pressed, palettes, stops, activeIndex }: BodyProps) {
+function KeycapBody({ pressed }: BodyProps) {
   /**
    * 캔버스 실측 크기. 배경이 화면을 가득 채워야 하므로 필요하다.
    *
@@ -195,55 +165,6 @@ function KeycapBody({ pressed, palettes, stops, activeIndex }: BodyProps) {
     }
   );
 
-  /** 축 전환용 진행값. 첫 렌더에서는 애니메이션 없이 현재 축에서 시작한다. */
-  const progress = useSharedValue(activeIndex);
-  const mounted = React.useRef(false);
-
-  React.useEffect(() => {
-    if (!mounted.current) {
-      mounted.current = true;
-      return;
-    }
-    progress.value = withTiming(activeIndex, { duration: BACKGROUND_FADE_MS });
-  }, [activeIndex, progress]);
-
-  const backgroundColors = useDerivedValue(() => [
-    interpolateColor(
-      progress.value,
-      stops,
-      palettes.map((palette) => palette.backgroundTop)
-    ),
-    interpolateColor(
-      progress.value,
-      stops,
-      palettes.map((palette) => palette.backgroundBottom)
-    ),
-  ]);
-
-  const housingColor = useDerivedValue(() =>
-    interpolateColor(
-      progress.value,
-      stops,
-      palettes.map((palette) => palette.housing)
-    )
-  );
-
-  const skirtColor = useDerivedValue(() =>
-    interpolateColor(
-      progress.value,
-      stops,
-      palettes.map((palette) => palette.capSkirt)
-    )
-  );
-
-  const capTopColor = useDerivedValue(() =>
-    interpolateColor(
-      progress.value,
-      stops,
-      palettes.map((palette) => palette.capTop)
-    )
-  );
-
   /** 키캡 전체가 내려간다. 하우징은 제자리에 있어 눌림이 보인다. */
   const capTransform = useDerivedValue(() => [{ translateY: depth.value }]);
 
@@ -254,18 +175,9 @@ function KeycapBody({ pressed, palettes, stops, activeIndex }: BodyProps) {
   const capShadowDy = useDerivedValue(() => CAP_SHADOW_DY - depth.value);
   const capShadowBlur = useDerivedValue(() => CAP_SHADOW_BLUR - depth.value * 0.6);
 
-  /**
-   * 라벨은 상판에 붙어 있어야 하므로 같은 깊이로 내린다. 색도 축에 따라
-   * 바뀌는데, 캔버스 안의 색들과 달리 이건 Skia가 읽지 않으므로 워크릿
-   * 값을 스타일로 옮긴다.
-   */
+  /** 라벨은 상판에 붙어 있어야 하므로 같은 깊이로 내린다. */
   const labelStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: depth.value }],
-    color: interpolateColor(
-      progress.value,
-      stops,
-      palettes.map((palette) => palette.label)
-    ),
   }));
 
   return (
@@ -273,12 +185,12 @@ function KeycapBody({ pressed, palettes, stops, activeIndex }: BodyProps) {
       <Canvas style={CANVAS} onSize={canvasSize}>
         {/* 배경은 캔버스 전체 — 즉 화면 전체를 덮는다. */}
         <Rect x={0} y={0} width={backgroundWidth} height={backgroundHeight}>
-          <LinearGradient start={vec(0, 0)} end={gradientEnd} colors={backgroundColors} />
+          <LinearGradient start={vec(0, 0)} end={gradientEnd} colors={BACKGROUND_COLORS} />
         </Rect>
 
         <Group transform={centerTransform}>
           {/* 하우징이 배경 위로 그림자를 드리운다. 레퍼런스의 그 그림자다. */}
-          <Box box={HOUSING_BOX} color={housingColor}>
+          <Box box={HOUSING_BOX} color={PALETTE.housing}>
             <BoxShadow
               dx={SHADOW_DX}
               dy={HOUSING_SHADOW_DY}
@@ -288,7 +200,7 @@ function KeycapBody({ pressed, palettes, stops, activeIndex }: BodyProps) {
           </Box>
 
           <Group transform={capTransform}>
-            <Box box={SKIRT_BOX} color={skirtColor}>
+            <Box box={SKIRT_BOX} color={PALETTE.capSkirt}>
               <BoxShadow
                 dx={SHADOW_DX}
                 dy={capShadowDy}
@@ -302,7 +214,7 @@ function KeycapBody({ pressed, palettes, stops, activeIndex }: BodyProps) {
               width={CAP_TOP.width}
               height={CAP_TOP.height}
               r={CAP_TOP.radius}
-              color={capTopColor}
+              color={PALETTE.capTop}
             />
           </Group>
         </Group>
@@ -339,7 +251,7 @@ const CONTAINER: ViewStyle = {
  * render-prop 구조라 그 자식이 `<View>`가 아니라 이 컴포넌트다 — 주입된 prop이
  * 컴포넌트에서 멈추고 실제 뷰까지 내려오지 않는다. 그래서 여기서 직접 붙인다.
  *
- * 클리커는 `backgroundColor`가 있어서 flatten 대상이 아니라 우연히 무사했다.
+ * (지금은 삭제된) 클리커는 `backgroundColor`가 있어서 flatten 대상이 아니라 우연히 무사했다.
  * 앞으로 discrete 기믹을 추가할 때 루트가 스타일만 있는 뷰라면 같은 걸 붙여야 한다.
  */
 const BODY: ViewStyle = {
@@ -379,4 +291,5 @@ const LABEL: TextStyle = {
   fontSize: 22,
   fontWeight: '600',
   letterSpacing: 0.5,
+  color: PALETTE.label,
 };
