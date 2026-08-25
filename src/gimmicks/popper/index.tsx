@@ -17,6 +17,8 @@ import { useDerivedValue, useSharedValue, type SharedValue } from 'react-native-
 import { REST_ANGLE, SlingGimmick, type SlingShot } from '@/gimmicks/_kinds/sling';
 import type { GimmickScreenProps } from '@/gimmicks/types';
 
+import { Confetti } from './confetti';
+
 /**
  * 파티 포퍼 — Sling 입력 모델. (§4)
  *
@@ -155,7 +157,8 @@ function PopperBody({ angle, power, shot }: BodyProps) {
           <LinearGradient start={vec(0, 0)} end={gradientEnd} colors={BACKGROUND_COLORS} />
         </Rect>
 
-        {/* Task 4가 여기(포퍼 뒤)에 <Confetti>를 끼운다 — 포퍼가 항상 앞. */}
+        {/* 색종이 — 포퍼보다 뒤에 그려 포퍼가 항상 앞에 온다(스펙 §6). */}
+        <Confetti shot={shot} muzzle={muzzle} canvasSize={canvasSize} />
 
         <Group transform={popperTransform}>
           {/* 조준 가이드 — 파워 0이면 투명해서 없는 것과 같다. */}
