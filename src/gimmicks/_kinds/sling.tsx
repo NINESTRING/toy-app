@@ -108,6 +108,14 @@ export function SlingGimmick({ haptic, config, onInteract, children }: Props) {
           /** 반동 스프링 도중에 다시 잡으면 그 자리에서 낚아챈다. */
           cancelAnimation(angle);
           cancelAnimation(power);
+          /**
+           * 잡는 순간 파워는 0이다 — `onUpdate`가 잡은 지점 기준
+           * translation으로 파워를 재기 때문이다. 반동 스프링을 도중에
+           * 낚아채면 power가 그 값에 얼어붙는데, 움직임 없는 탭은
+           * `onUpdate`를 한 번도 거치지 않고 `onFinalize`로 가므로 그 잔값이
+           * 그대로 발사 판정을 통과한다. 여기서 0으로 되돌려 막는다.
+           */
+          power.value = 0;
         })
         .onUpdate((event) => {
           'worklet';

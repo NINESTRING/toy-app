@@ -137,6 +137,28 @@ export function findGimmick(id: string | undefined): Gimmick | undefined {
 const ALL_GIMMICKS: readonly Gimmick[] = GIMMICKS;
 
 /**
+ * 하나의 햅틱 스펙이 참조하는 프리셋. sling처럼 프리셋을 중첩해 갖는
+ * 타입이 생겨도 여기서 걸린다 — `never` 대입이 새 멤버를 컴파일 에러로
+ * 만들기 때문이다. §4 원칙 3(번들 기믹의 프리셋은 전부 preload)이 조용히
+ * 깨지는 걸 막는 자리다.
+ */
+function presetsOf(haptic: HapticSpec): readonly PresetName[] {
+  switch (haptic.type) {
+    case 'preset':
+      return [haptic.name];
+    case 'pattern':
+    case 'realtime':
+      return [];
+    case 'sling':
+      return presetsOf(haptic.fire);
+    default: {
+      const exhaustive: never = haptic;
+      return exhaustive;
+    }
+  }
+}
+
+/**
  * 번들에 포함된 기믹이 쓰는 프리셋. 앱 시작 시 preload한다. (§4 원칙 3)
  *
  * 변형의 프리셋까지 모아야 한다. 기본 변형만 preload하면 사용자가 축을 바꾼
@@ -153,14 +175,6 @@ export const BUNDLED_PRESETS: readonly PresetName[] = ALL_GIMMICKS.flatMap((gimm
   const variants: readonly GimmickVariant<HapticSpec>[] = gimmick.variants ?? [];
   const haptics: readonly HapticSpec[] = [gimmick.haptic, ...variants.map((v) => v.haptic)];
 
-  return haptics.flatMap((haptic) => {
-    if (haptic.type === 'preset') {
-      return [haptic.name];
-    }
-    /** sling은 fire 쪽에 프리셋이 숨어 있다 — 안 모으면 첫 펑이 씹힌다(§4 원칙 3). */
-    if (haptic.type === 'sling' && haptic.fire.type === 'preset') {
-      return [haptic.fire.name];
-    }
-    return [];
-  });
+  /** sling은 fire 쪽에 프리셋이 숨어 있다 — 안 모으면 첫 펑이 씹힌다(§4 원칙 3). */
+  return haptics.flatMap(presetsOf);
 });

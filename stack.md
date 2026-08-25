@@ -187,8 +187,10 @@ src/
       sling.tsx
       grid.tsx
       physics.tsx
-    clicker/
+    keycap/
     dial/
+    bulb/
+    popper/
     bubblewrap/
   haptics/                # 엔진 싱글톤, 폴백 로직
   audio/                  # 플레이어 풀

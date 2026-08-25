@@ -17,6 +17,10 @@ import type { PresetName } from '@/haptics/presets';
 /**
  * 햅틱은 코드가 아니라 데이터다. 기믹 정의가 순수 데이터로 유지되면
  * 나중에 서버에서 내려받을 수 있다.
+ *
+ * 앞의 셋이 전송 방식 원시형(프리셋 / 패턴 / 실시간)인 것과 달리
+ * `SlingHaptic`은 그 원시형을 품는 복합형이라는 게 의도된 비대칭이다.
+ * 복합형이 하나 더 생기면 이 유니온을 원시형과 복합형으로 쪼개는 게 맞다.
  */
 export type HapticSpec = PresetHaptic | PatternHaptic | RealtimeHaptic | SlingHaptic;
 

@@ -30,6 +30,12 @@ import type { SlingShot } from '@/gimmicks/_kinds/sling';
  * RSXform·색 버퍼의 modifier는 클로저의 shared value가 바뀔 때 다시
  * 도는 매퍼다. 파티클 배열은 제자리 변형이라 그것만으로는 안 깨어나므로,
  * 프레임 콜백이 tick을 증가시켜 매 프레임 갱신을 트리거한다.
+ *
+ * 훅(`useConfetti`)과 그리는 컴포넌트(`ConfettiAtlas`)를 나눠 둔 이유:
+ * Skia는 `Canvas`의 자식을 별도 react-reconciler 루트에 마운트하므로
+ * Canvas 안에서 훅을 부르면 RN 트리가 아닌 그 루트의 생명주기를 탄다.
+ * Skia가 문서화한 Atlas 패턴대로 훅은 Canvas 바깥(RN 트리)에서 돌리고
+ * 버퍼만 아래로 넘긴다 — 로직은 여전히 이 파일이 전부 소유한다.
  */
 
 const POOL_SIZE = 256;
@@ -37,6 +43,9 @@ const POOL_SIZE = 256;
 /** 스프라이트(직사각 색종이 조각) 원본 크기. 개체 스케일이 곱해진다. */
 const SPRITE_W = 6;
 const SPRITE_H = 10;
+
+/** `useTexture`의 deps에 들어가므로 반드시 모듈 상수 — 인라인 리터럴이면 발사마다 텍스처를 새로 굽는다. */
+const SPRITE_SIZE = { width: SPRITE_W, height: SPRITE_H };
 
 /** 발사 1회당 개수: 40 + 80 × power. (스펙 §7) */
 const COUNT_BASE = 40;
@@ -94,14 +103,25 @@ type Props = {
   canvasSize: SharedValue<SkSize>;
 };
 
-export function Confetti({ shot, muzzle, canvasSize }: Props) {
+/** `useConfetti`가 돌려주는, `ConfettiAtlas`에 그대로 펼쳐 넘기는 버퍼 묶음. */
+export type ConfettiAtlasProps = {
+  texture: ReturnType<typeof useTexture>;
+  transforms: ReturnType<typeof useRSXformBuffer>;
+  colors: ReturnType<typeof useColorBuffer>;
+};
+
+export function useConfetti({ shot, muzzle, canvasSize }: Props): ConfettiAtlasProps {
   /**
    * 흰 조각 하나를 GPU 텍스처로. 색은 Atlas colors가 개체별로 입힌다 —
    * srcIn이라 스프라이트의 알파만 남기고 색을 통째로 덮는다.
+   *
+   * 엘리먼트는 인라인이어도 된다 — `useTexture`가 그리기 이펙트에 넘기는
+   * deps는 세 번째 인자(생략 시 `[]`)뿐이라 엘리먼트 identity는 안 본다.
+   * 반면 size는 `usePictureAsTexture`의 deps에 그대로 들어가므로 상수여야 한다.
    */
   const texture = useTexture(
     <Rect x={0} y={0} width={SPRITE_W} height={SPRITE_H} color="white" />,
-    { width: SPRITE_W, height: SPRITE_H }
+    SPRITE_SIZE
   );
 
   const particles = useSharedValue<Particle[]>(
@@ -228,6 +248,15 @@ export function Confetti({ shot, muzzle, canvasSize }: Props) {
     color[3] = particle.life <= 0 ? 0 : Math.min(1, particle.life / FADE_SECONDS);
   });
 
+  return { texture, transforms, colors };
+}
+
+/**
+ * 그리기 전담. Canvas 안에 놓이는 유일한 조각이고 훅을 하나도 쓰지 않는다 —
+ * 시뮬레이션은 전부 `useConfetti`가 RN 트리에서 끝낸 뒤라, 여기는 버퍼를
+ * Atlas 드로우콜 1번으로 흘려보내기만 한다.
+ */
+export function ConfettiAtlas({ texture, transforms, colors }: ConfettiAtlasProps) {
   return (
     <Atlas
       image={texture}

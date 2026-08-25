@@ -17,7 +17,7 @@ import { useDerivedValue, useSharedValue, type SharedValue } from 'react-native-
 import { REST_ANGLE, SlingGimmick, type SlingShot } from '@/gimmicks/_kinds/sling';
 import type { GimmickScreenProps } from '@/gimmicks/types';
 
-import { Confetti } from './confetti';
+import { ConfettiAtlas, useConfetti } from './confetti';
 
 /**
  * 파티 포퍼 — Sling 입력 모델. (§4)
@@ -145,6 +145,12 @@ function PopperBody({ angle, power, shot }: BodyProps) {
     };
   });
 
+  /**
+   * 색종이 파티클. 훅이 Canvas 바깥(이 RN 트리)에서 돌아야 한다 — Skia는
+   * Canvas 자식을 별도 reconciler 루트에 마운트하기 때문이다(confetti.tsx 참조).
+   */
+  const confetti = useConfetti({ shot, muzzle, canvasSize });
+
   return (
     /**
      * 전구·키캡과 같은 지뢰 주의: 스타일만 있는 루트 뷰는 Fabric이
@@ -158,7 +164,7 @@ function PopperBody({ angle, power, shot }: BodyProps) {
         </Rect>
 
         {/* 색종이 — 포퍼보다 뒤에 그려 포퍼가 항상 앞에 온다(스펙 §6). */}
-        <Confetti shot={shot} muzzle={muzzle} canvasSize={canvasSize} />
+        <ConfettiAtlas {...confetti} />
 
         <Group transform={popperTransform}>
           {/* 조준 가이드 — 파워 0이면 투명해서 없는 것과 같다. */}
