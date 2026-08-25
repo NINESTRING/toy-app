@@ -27,7 +27,7 @@ import { TugGimmick } from '@/gimmicks/_kinds/tug';
 import type { GimmickScreenProps } from '@/gimmicks/types';
 
 import { useCord } from './cord';
-import { CORD_WIDTH, KNOT_R } from './cordPhysics';
+import { CORD_WIDTH, KNOT_R, isCordTaut } from './cordPhysics';
 
 /**
  * 전구 — Tug 입력 모델. (§4)
@@ -108,7 +108,16 @@ const SHINE_PATH = Skia.PathBuilder.Make()
 export default function Bulb({ gimmick, variant, onInteract }: GimmickScreenProps<'tug'>) {
   return (
     <View style={CONTAINER}>
-      <TugGimmick haptic={variant.haptic} config={gimmick.config} onInteract={onInteract}>
+      {/*
+        `canFire`: 줄이 늘어진 채로 놓으면 불발이다. 줄을 위로 밀어 올린
+        상태라는 뜻이고, 실제 풀체인은 밀어서 안 걸린다 — 당겨야 걸린다.
+      */}
+      <TugGimmick
+        haptic={variant.haptic}
+        config={gimmick.config}
+        onInteract={onInteract}
+        canFire={isCordTaut}
+      >
         {({ dragX, dragY, on, active }) => (
           <BulbBody dragX={dragX} dragY={dragY} on={on} active={active} />
         )}

@@ -34,6 +34,7 @@ export const NODE_COUNT = 12;
  */
 const CORD_SLACK = 1.0;
 
+/** 앵커에서 휴지점까지의 직선거리 = 줄의 원래 길이. */
 const SPAN = Math.sqrt(
   (CORD_REST.x - CORD_ANCHOR.x) ** 2 + (CORD_REST.y - CORD_ANCHOR.y) ** 2
 );
@@ -246,4 +247,21 @@ export function maxNodeSpeed(nodes: CordNode[]): number {
     }
   }
   return fastest;
+}
+
+/**
+ * 지금 줄이 팽팽한지 — 앵커에서 매듭까지가 원래 길이 이상인지.
+ *
+ * tug가 릴리스에서 이걸 물어보고, 거짓이면 토글을 쏘지 않는다. 줄이 늘어진
+ * 채로 놓는 건 줄을 **위로 밀어 올린** 상태라는 뜻이고, 실제 풀체인 스위치는
+ * 밀어 올려서는 안 걸린다 — 당겨야 걸린다.
+ *
+ * 기하가 이 파일에 있으므로 판정도 여기서 만들어 tug에 넘긴다. `_kinds`는
+ * 기믹의 도형을 몰라야 한다(§4의 역할 분담).
+ */
+export function isCordTaut(dragX: number, dragY: number): boolean {
+  'worklet';
+  /** 휴지점은 앵커 바로 아래 SPAN만큼이므로, 매듭까지의 현은 이렇게 된다. */
+  const chord = Math.sqrt(dragX * dragX + (SPAN + dragY) ** 2);
+  return chord >= SPAN;
 }
