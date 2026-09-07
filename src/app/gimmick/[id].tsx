@@ -5,6 +5,7 @@ import * as React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useSoundPool } from '@/audio/useSoundPool';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
@@ -75,6 +76,8 @@ function GimmickView({ gimmick }: { gimmick: Gimmick }) {
   const setVariant = useGimmickStore((state) => state.setVariant);
   const count = useGimmickCount(gimmick.id);
   const capability = useHapticCapability();
+  /** registry에 `sound`가 있으면 조작마다 튼다. 없으면 no-op. (§5 오디오) */
+  const playSound = useSoundPool(gimmick.sound);
 
   const variants = React.useMemo(() => variantsOf(gimmick), [gimmick]);
   const storedVariantId = useGimmickVariantId(gimmick.id);
@@ -92,8 +95,9 @@ function GimmickView({ gimmick }: { gimmick: Gimmick }) {
   }, [hydrate, gimmick.id]);
 
   const onInteract = React.useCallback(() => {
+    playSound();
     interact(gimmick.id);
-  }, [interact, gimmick.id]);
+  }, [playSound, interact, gimmick.id]);
 
   const onReset = React.useCallback(() => {
     reset(gimmick.id);

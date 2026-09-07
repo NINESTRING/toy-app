@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react-native';
 import type { ComponentType } from 'react';
 import type { Pattern } from 'react-native-pulsar';
 
+import type { SoundKey } from '@/audio/assets';
 import type { PresetName } from '@/haptics/presets';
 import type { TintName } from '@/lib/tints';
 
@@ -269,8 +270,12 @@ export type GimmickLook = {
 type GimmickBase = {
   id: string;
   name: string;
-  /** 에셋 키. 사운드는 §5대로 플레이어 풀을 거친다. */
-  sound?: string;
+  /**
+   * 사운드 키. 없는 키는 컴파일 에러(`audio/assets.ts`). 소리는 §5대로
+   * 플레이어 풀을 거치며, 기믹 화면(셸)이 `onInteract`마다 튼다 — 기믹
+   * 컴포넌트는 소리를 모른다.
+   */
+  sound?: SoundKey;
   /** 갤러리 타일의 아이콘과 틴트. */
   look: GimmickLook;
 };
