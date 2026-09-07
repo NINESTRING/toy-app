@@ -30,7 +30,8 @@ import { DiscreteGimmick } from '@/gimmicks/_kinds/discrete';
 import type { GimmickScreenProps } from '@/gimmicks/types';
 import { useGimmickCount } from '@/store/gimmickState';
 
-import { lapsOf, progressOf, remainingOf } from './cycle';
+import { lapsOf, progressOf, quoteIndexAt, remainingOf } from './cycle';
+import { QUOTES, type Quote } from './quotes';
 
 /**
  * 목탁 — Discrete 입력 모델. (§4, 스펙 2026-09-07)
@@ -91,6 +92,12 @@ const RETURN_SPRING = { damping: 12, stiffness: 220, mass: 1 };
 
 /** 진행 바가 새 값으로 미끄러지는 시간. */
 const PROGRESS_MS = 200;
+
+/** 문구 카드 타이밍(스펙 §4): 페이드 300ms, 유지 4초. */
+const CARD_FADE_MS = 300;
+const CARD_HOLD_MS = 4000;
+/** 나타날 때 아래에서 올라오는 거리(pt). */
+const CARD_LIFT = 12;
 
 /**
  * 팔레트. 목탁 전용 시각 정보라 컴포넌트가 갖는다(키캡 전례).
@@ -335,9 +342,77 @@ function MoktakBody({ pressed, canvasSize, count }: BodyProps) {
           총 {count.toLocaleString()}개 소멸 · {lapsOf(count)}바퀴 완주
         </Text>
 
-        {/* Task 6: QuoteCard */}
+        <QuoteCard count={count} />
       </View>
     </View>
+  );
+}
+
+/**
+ * 27타마다 뜨는 문구 카드. (스펙 §4)
+ *
+ * `count`가 바뀔 때 `quoteIndexAt`이 인덱스를 주면 문구를 갈고 페이드 인 →
+ * 4초 유지 → 페이드 아웃. 표시 중에 다음 27이 오면 문구를 갈고 타이머를
+ * 다시 잰다. `pointerEvents="none"` — 카드 아래 목탁을 치면 그대로 친다.
+ *
+ * 문구 선택이 결정적이라(카운트에서 계산) 같은 횟수에 같은 문구가 뜬다.
+ */
+function QuoteCard({ count }: { count: number }) {
+  const [quote, setQuote] = React.useState<Quote | null>(null);
+  const opacity = useSharedValue(0);
+  const lift = useSharedValue(CARD_LIFT);
+  const hideTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    const index = quoteIndexAt(count, QUOTES.length);
+    if (index === null) {
+      return;
+    }
+    const next = QUOTES[index];
+    if (next === undefined) {
+      return;
+    }
+    setQuote(next);
+
+    cancelAnimation(opacity);
+    cancelAnimation(lift);
+    opacity.value = withTiming(1, { duration: CARD_FADE_MS });
+    lift.value = withTiming(0, { duration: CARD_FADE_MS });
+
+    if (hideTimer.current !== null) {
+      clearTimeout(hideTimer.current);
+    }
+    hideTimer.current = setTimeout(() => {
+      hideTimer.current = null;
+      opacity.value = withTiming(0, { duration: CARD_FADE_MS });
+      lift.value = withTiming(CARD_LIFT, { duration: CARD_FADE_MS });
+    }, CARD_FADE_MS + CARD_HOLD_MS);
+  }, [count, opacity, lift]);
+
+  /** 언마운트 시 타이머 정리 — 화면을 떠난 뒤 shared value를 만지지 않는다. */
+  React.useEffect(
+    () => () => {
+      if (hideTimer.current !== null) {
+        clearTimeout(hideTimer.current);
+      }
+    },
+    []
+  );
+
+  const cardStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: lift.value }],
+  }));
+
+  if (quote === null) {
+    return null;
+  }
+
+  return (
+    <Animated.View style={[CARD, cardStyle]} pointerEvents="none">
+      <Text style={CARD_TEXT}>{quote.text}</Text>
+      <Text style={CARD_SOURCE}>— {quote.source}</Text>
+    </Animated.View>
   );
 }
 
@@ -430,5 +505,41 @@ const SUBLINE: TextStyle = {
   top: 126,
   textAlign: 'center',
   fontSize: 14,
+  color: PALETTE.inkMuted,
+};
+
+/**
+ * 카드는 상단 정보 아래, 몸통 위쪽에 겹친다. 그림자는 iOS `shadow*` +
+ * 안드로이드 `elevation` 둘 다 — 방향 없는 부드러운 그림자라 두 OS 차이가
+ * 눈에 안 띈다(키캡이 Skia 그림자를 택한 이유였던 방향성이 여기엔 없다).
+ */
+const CARD: ViewStyle = {
+  position: 'absolute',
+  left: 8,
+  right: 8,
+  top: 156,
+  paddingHorizontal: 20,
+  paddingVertical: 18,
+  borderRadius: 20,
+  backgroundColor: '#ffffff',
+  shadowColor: '#000000',
+  shadowOpacity: 0.08,
+  shadowRadius: 16,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 4,
+};
+
+const CARD_TEXT: TextStyle = {
+  textAlign: 'center',
+  fontSize: 17,
+  lineHeight: 26,
+  fontWeight: '600',
+  color: PALETTE.ink,
+};
+
+const CARD_SOURCE: TextStyle = {
+  marginTop: 8,
+  textAlign: 'center',
+  fontSize: 13,
   color: PALETTE.inkMuted,
 };
