@@ -61,7 +61,7 @@ const BODY_SHAPE = { cx: 128, cy: 270, rx: 92, ry: 98 };
 const SLIT = { x: 124, y: 176, width: 8, height: 70, r: 4 };
 
 /** 앞면 구멍. */
-const HOLE = { x: 100, y: 226, width: 44, height: 52 };
+const HOLE = { x: 100, y: 252, width: 44, height: 52 };
 
 /** 아래 손잡이 고리. 몸통 뒤에 그려 겹치는 부분이 몸통에 가려진다. */
 const RING = { cx: 96, cy: 392, outerR: 44, innerR: 24 };
@@ -72,12 +72,13 @@ const FLOOR_SHADOW = { x: 53, y: 372, width: 150, height: 24, blur: 12 };
 /**
  * 채. 위 끝이 회전축이고 그 축 기준 로컬 좌표로 그린다.
  * 휴지 각도는 몸통 반대쪽으로 살짝 기운 값, 타격 각도는 아래 끝이 몸통
- * 오른쪽 면에 닿는 값 — 몸통 우측 가장자리(x≈208, y≈319)에 끝 반지름 13을
- * 더해 sin⁻¹((268-221)/165)로 잡았다. 실기기에서 미세 조정.
+ * 오른쪽 면에 닿는 값 — 팁 중심은 축에서 150 떨어져 있고(`tipY`), 몸통
+ * 우측 가장자리(x≈208, y≈319)까지 sin⁻¹((268-221)/150) ≈ 0.32로 잡았다.
+ * 실기기에서 미세 조정.
  */
-const STICK = { pivotX: 268, pivotY: 160, shaftW: 12, shaftLen: 150, tipY: 165, tipR: 13 };
+const STICK = { pivotX: 268, pivotY: 160, shaftW: 12, shaftLen: 150, tipY: 150, tipR: 13 };
 const REST_ANGLE = -0.12;
-const STRIKE_ANGLE = 0.29;
+const STRIKE_ANGLE = 0.32;
 
 /** 타격 순간 몸통이 눌리는 정도. */
 const BODY_SQUASH = 0.03;
@@ -225,7 +226,15 @@ function MoktakBody({ pressed, canvasSize, count }: BodyProps) {
 
   /** 진행 바. React 상태(count)가 바뀌면 200ms로 미끄러진다. */
   const progress = useSharedValue(progressOf(count));
+  /** 마운트 시점 값으로 씨딩 — 진입 시엔 실제로 바뀐 게 없으니 미끄러질
+   * 이유가 없다(QuoteCard의 F1 수정과 같은 이유). */
+  const seenProgress = React.useRef(count);
   React.useEffect(() => {
+    const previous = seenProgress.current;
+    seenProgress.current = count;
+    if (count === previous) {
+      return;
+    }
     progress.value = withTiming(progressOf(count), { duration: PROGRESS_MS });
   }, [count, progress]);
 
@@ -362,8 +371,21 @@ function QuoteCard({ count }: { count: number }) {
   const opacity = useSharedValue(0);
   const lift = useSharedValue(CARD_LIFT);
   const hideTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 마운트 시점 값으로 씨딩 — 첫 커밋은 변화가 아니다(아래 참고). */
+  const seen = React.useRef(count);
 
   React.useEffect(() => {
+    /**
+     * 마운트·재렌더는 타격이 아니다 — 카드는 27번째 타격의 보상이다. 갤러리가
+     * 진입 전에 이미 카운트를 하이드레이트해두므로, 27의 배수를 들고
+     * 화면에 들어오거나(딥링크로 0→N 하이드레이트) 부모 리렌더로 이 컴포넌트가
+     * 다시 커밋돼도 `count`가 실제로는 안 바뀐 첫 실행에서 카드가 뜨면 안 된다.
+     */
+    const previous = seen.current;
+    seen.current = count;
+    if (count === previous) {
+      return;
+    }
     const index = quoteIndexAt(count, QUOTES.length);
     if (index === null) {
       return;
