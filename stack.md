@@ -205,6 +205,7 @@ src/
     dial/
     bulb/
     popper/
+    moktak/
     bubblewrap/
   haptics/                # 엔진 싱글톤, 폴백 로직
   audio/                  # 플레이어 풀
@@ -237,6 +238,11 @@ src/
 
 - **인스턴스 하나로는 연타 불가.** 재생 끝나기 전에 다시 못 튼다.
   → 플레이어 풀 4~5개 라운드로빈
+- **소리는 셸이 튼다.** registry의 `sound` 키(`audio/assets.ts`의 `SoundKey`) →
+  기믹 화면이 `useSoundPool`로 풀을 만들어 `onInteract`마다 재생, 이탈 시 해제.
+  기믹 컴포넌트는 소리를 모른다 — 햅틱처럼 소리도 데이터다. 재생은 JS
+  스레드라 햅틱(UI 스레드)보다 늦다. 첫 사용처는 목탁(합성 WAV,
+  `scripts/synth-moktak.mjs`).
 
 ### 제스처
 
