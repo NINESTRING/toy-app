@@ -1,4 +1,10 @@
-import { Disc3Icon, KeyboardIcon, LightbulbIcon, PartyPopperIcon } from 'lucide-react-native';
+import {
+  Disc3Icon,
+  DrumIcon,
+  KeyboardIcon,
+  LightbulbIcon,
+  PartyPopperIcon,
+} from 'lucide-react-native';
 
 import type { PresetName } from '@/haptics/presets';
 
@@ -145,6 +151,24 @@ export const GIMMICKS = [
       fanDegrees: 150,
     },
     component: () => import('./popper'),
+  },
+  {
+    id: 'moktak',
+    name: '목탁',
+    /** 틴트는 이 기믹의 지배색에서 왔다 — 몸통 그라디언트 중간 #b5532b. */
+    look: { icon: DrumIcon, tint: 'orange' },
+    kind: 'discrete',
+    /**
+     * `knock`은 전구에서 실기기 확인된 값이라 무음 위험이 없다(§5 "느낌 없는
+     * 프리셋이 실재한다"). 전구와 같은 프리셋인 게 아쉬우므로 실기기에서
+     * 후보(rap, thud, gavel, plunk, castanets)를 비교해 구분되는 것으로
+     * 바꾼다(스펙 §9).
+     */
+    haptic: { type: 'preset', name: 'knock' },
+    /** 이 앱 최초의 소리. `audio/assets.ts`의 키 — 셸이 `onInteract`마다 튼다. */
+    sound: 'moktak',
+    config: {/** 릴리스 햅틱 없음 — 치는 순간 한 방이면 충분하다. */},
+    component: () => import('./moktak'),
   },
 ] as const satisfies readonly Gimmick[];
 

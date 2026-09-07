@@ -9,6 +9,7 @@
  *   emerald ← 다이얼 혜성 팔레트 첫 색 #1DD1A1
  *   amber   ← 전구 글로우 #ffd97a
  *   rose    ← 파티 포퍼 콘 베이스 #ff6b6b
+ *   orange  ← 목탁 몸통 #b5532b
  *
  * **테마 토큰이 아니다.** `theme.ts`와 `global.css`의 무채색 토큰은 그대로
  * 두고, 이 색은 갤러리 타일에서만 쓴다. `--color-tint-*`를 만들면 셸 전체가
@@ -50,6 +51,10 @@ export const TINTS = {
   rose: {
     surface: 'bg-rose-500/10 dark:bg-rose-500/15 border-rose-500/20',
     icon: 'text-rose-600 dark:text-rose-400',
+  },
+  orange: {
+    surface: 'bg-orange-500/10 dark:bg-orange-500/15 border-orange-500/20',
+    icon: 'text-orange-600 dark:text-orange-400',
   },
 } as const satisfies Record<string, Tint>;
 
