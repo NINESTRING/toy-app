@@ -133,6 +133,21 @@ const RING_PATH = Skia.PathBuilder.Make()
   .addCircle(RING.cx, RING.cy, RING.innerR)
   .detach();
 
+/**
+ * 그라디언트 좌표·중심점도 상수다(F5) — `count`가 안 바뀌어도 `MoktakBody`가
+ * 매 탭마다 리렌더되면(§ 별도 커밋 전) 이 `vec()` 호출들이 매번 새 객체를
+ * 만들었다. 지금은 컴포넌트가 count-free라 재렌더 자체가 없지만, 그래도
+ * 모듈 상수로 두는 편이 맞다 — 애초에 프레임마다 바뀌지 않는 값이다.
+ */
+const RING_GRADIENT_START = vec(RING.cx - RING.outerR, RING.cy);
+const RING_GRADIENT_END = vec(RING.cx + RING.outerR, RING.cy);
+const BODY_GRADIENT_CENTER = vec(BODY_SHAPE.cx - 28, BODY_SHAPE.cy - 34);
+const BODY_ORIGIN = vec(BODY_SHAPE.cx, BODY_SHAPE.cy);
+const STICK_SHAFT_GRADIENT_START = vec(-STICK.shaftW / 2, 0);
+const STICK_SHAFT_GRADIENT_END = vec(STICK.shaftW / 2, 0);
+const STICK_TIP_GRADIENT_START = vec(-STICK.tipR, 0);
+const STICK_TIP_GRADIENT_END = vec(STICK.tipR, 0);
+
 export default function Moktak({ gimmick, variant, onInteract }: GimmickScreenProps<'discrete'>) {
   /**
    * 캔버스 실측 크기. 그림과 히트테스트가 같은 값을 봐야 눈에 보이는 몸통이
@@ -143,6 +158,11 @@ export default function Moktak({ gimmick, variant, onInteract }: GimmickScreenPr
   /**
    * 몸통 타원 또는 손잡이 고리 안이면 맞는다. 채·배경·상단 정보는 빗나간다.
    * 루트 뷰 좌표 → 설계 좌표는 `centerTransform`의 역변환이다.
+   *
+   * 고리는 시각적으로 가운데가 뚫려 있지만(`RING_PATH`의 evenOdd 구멍)
+   * 판정은 바깥 반지름의 원반 전체다 — 손끝이 구멍보다 크므로 구멍을
+   * 제외해봐야 체감상 이득이 없다. 일부러 단순화한 잡는 영역이지 그림과
+   * 판정이 어긋난 버그가 아니다.
    */
   const hitTest = React.useCallback(
     (x: number, y: number) => {
@@ -175,7 +195,21 @@ export default function Moktak({ gimmick, variant, onInteract }: GimmickScreenPr
         config={gimmick.config}
         onInteract={onInteract}
         hitTest={hitTest}>
-        {({ pressed }) => <MoktakBody pressed={pressed} canvasSize={canvasSize} count={count} />}
+        {({ pressed }) => (
+          /**
+           * 키캡과 같은 지뢰 주의: 스타일만 있는 루트 뷰는 Fabric이 flatten할
+           * 수 있고, 그러면 GestureDetector가 엉뚱한 view tag에 붙는다.
+           *
+           * Canvas(그림)와 상단 정보(DESIGN_BOX)를 같은 루트 아래 형제로
+           * 둔다(F5) — `MoktakBody`는 `count`를 받지 않고 `MoktakInfo`만
+           * 받으므로, 탭마다 카운트가 바뀌어도 Skia 씬(`MoktakBody`)은
+           * 리렌더되지 않는다. GestureDetector가 붙는 루트는 그대로다.
+           */
+          <View style={BODY} collapsable={false}>
+            <MoktakBody pressed={pressed} canvasSize={canvasSize} />
+            <MoktakInfo count={count} />
+          </View>
+        )}
       </DiscreteGimmick>
     </View>
   );
@@ -184,11 +218,16 @@ export default function Moktak({ gimmick, variant, onInteract }: GimmickScreenPr
 type BodyProps = {
   pressed: SharedValue<number>;
   canvasSize: SharedValue<SkSize>;
-  /** 셸 카운트. 108 사이클은 전부 여기서 파생된다. */
-  count: number;
 };
 
-function MoktakBody({ pressed, canvasSize, count }: BodyProps) {
+/**
+ * Skia 씬. `count`를 모른다 — 받는 건 `pressed`와 캔버스 크기뿐이다(F5).
+ * 상단 정보(숫자·진행 바·카드)는 `MoktakInfo`가 따로 그린다. 그 분리 덕에
+ * 탭할 때마다(=`count`가 바뀔 때마다) 이 ~15개짜리 Skia 트리가 다시
+ * 선언되지 않는다 — 스윙·눌림은 전부 `pressed`에서 파생된 SharedValue라
+ * 리렌더 없이도 애니메이션된다.
+ */
+function MoktakBody({ pressed, canvasSize }: BodyProps) {
   const backgroundWidth = useDerivedValue(() => canvasSize.value.width);
   const backgroundHeight = useDerivedValue(() => canvasSize.value.height);
 
@@ -224,11 +263,105 @@ function MoktakBody({ pressed, canvasSize, count }: BodyProps) {
 
   const bodyTransform = useDerivedValue(() => [{ scale: 1 - BODY_SQUASH * swing.value }]);
 
+  return (
+    <Canvas style={CANVAS} onSize={canvasSize}>
+      {/* 배경은 캔버스 전체 — 즉 화면 전체를 덮는다. */}
+      <Rect
+        x={0}
+        y={0}
+        width={backgroundWidth}
+        height={backgroundHeight}
+        color={PALETTE.background}
+      />
+
+      <Group transform={centerTransform}>
+        {/* 바닥 그림자. 몸통보다 먼저 그려 뒤에 깔린다. */}
+        <Oval
+          x={FLOOR_SHADOW.x}
+          y={FLOOR_SHADOW.y}
+          width={FLOOR_SHADOW.width}
+          height={FLOOR_SHADOW.height}
+          color={PALETTE.floorShadow}>
+          <BlurMask blur={FLOOR_SHADOW.blur} style="normal" />
+        </Oval>
+
+        {/* 손잡이 고리. 몸통 뒤. 두 원 + evenOdd로 구멍을 낸다. */}
+        <Path path={RING_PATH} fillType="evenOdd">
+          <LinearGradient
+            start={RING_GRADIENT_START}
+            end={RING_GRADIENT_END}
+            colors={BODY_GRADIENT_COLORS}
+          />
+        </Path>
+
+        {/* 몸통. 타격 순간 살짝 눌린다 — 중심 기준 scale. */}
+        <Group transform={bodyTransform} origin={BODY_ORIGIN}>
+          <Oval
+            x={BODY_SHAPE.cx - BODY_SHAPE.rx}
+            y={BODY_SHAPE.cy - BODY_SHAPE.ry}
+            width={BODY_SHAPE.rx * 2}
+            height={BODY_SHAPE.ry * 2}>
+            <RadialGradient c={BODY_GRADIENT_CENTER} r={150} colors={BODY_GRADIENT_COLORS} />
+          </Oval>
+          <RoundedRect
+            x={SLIT.x}
+            y={SLIT.y}
+            width={SLIT.width}
+            height={SLIT.height}
+            r={SLIT.r}
+            color={PALETTE.cavity}
+          />
+          <Oval
+            x={HOLE.x}
+            y={HOLE.y}
+            width={HOLE.width}
+            height={HOLE.height}
+            color={PALETTE.cavity}
+          />
+        </Group>
+
+        {/* 채. 위 끝이 축. 로컬 좌표는 축이 원점이다. */}
+        <Group transform={stickTransform}>
+          <RoundedRect
+            x={-STICK.shaftW / 2}
+            y={0}
+            width={STICK.shaftW}
+            height={STICK.shaftLen}
+            r={STICK.shaftW / 2}>
+            <LinearGradient
+              start={STICK_SHAFT_GRADIENT_START}
+              end={STICK_SHAFT_GRADIENT_END}
+              colors={STICK_GRADIENT_COLORS}
+            />
+          </RoundedRect>
+          <Circle cx={0} cy={STICK.tipY} r={STICK.tipR}>
+            <LinearGradient
+              start={STICK_TIP_GRADIENT_START}
+              end={STICK_TIP_GRADIENT_END}
+              colors={STICK_GRADIENT_COLORS}
+            />
+          </Circle>
+        </Group>
+      </Group>
+    </Canvas>
+  );
+}
+
+/**
+ * 상단 정보 RN 레이어(F5로 분리). `count`만 받는다 — 셸 카운트가 바뀔 때
+ * 이 컴포넌트만 리렌더되고 `MoktakBody`(Skia 씬)는 그대로다.
+ *
+ * 텍스트는 RN 쪽이다. Skia 텍스트는 폰트 에셋을 요구하므로 피한다(키캡
+ * 전례). 설계 상자와 같은 크기의 뷰를 BODY가 가운데 정렬해주므로 좌표를
+ * 캔버스의 센터링 transform과 따로 계산할 필요가 없다.
+ */
+function MoktakInfo({ count }: { count: number }) {
   /** 진행 바. React 상태(count)가 바뀌면 200ms로 미끄러진다. */
   const progress = useSharedValue(progressOf(count));
   /** 마운트 시점 값으로 씨딩 — 진입 시엔 실제로 바뀐 게 없으니 미끄러질
    * 이유가 없다(QuoteCard의 F1 수정과 같은 이유). */
   const seenProgress = React.useRef(count);
+
   React.useEffect(() => {
     const previous = seenProgress.current;
     seenProgress.current = count;
@@ -243,116 +376,20 @@ function MoktakBody({ pressed, canvasSize, count }: BodyProps) {
   }));
 
   return (
-    /**
-     * 키캡과 같은 지뢰 주의: 스타일만 있는 루트 뷰는 Fabric이 flatten할 수
-     * 있고, 그러면 GestureDetector가 엉뚱한 view tag에 붙는다.
-     */
-    <View style={BODY} collapsable={false}>
-      <Canvas style={CANVAS} onSize={canvasSize}>
-        {/* 배경은 캔버스 전체 — 즉 화면 전체를 덮는다. */}
-        <Rect
-          x={0}
-          y={0}
-          width={backgroundWidth}
-          height={backgroundHeight}
-          color={PALETTE.background}
-        />
-
-        <Group transform={centerTransform}>
-          {/* 바닥 그림자. 몸통보다 먼저 그려 뒤에 깔린다. */}
-          <Oval
-            x={FLOOR_SHADOW.x}
-            y={FLOOR_SHADOW.y}
-            width={FLOOR_SHADOW.width}
-            height={FLOOR_SHADOW.height}
-            color={PALETTE.floorShadow}>
-            <BlurMask blur={FLOOR_SHADOW.blur} style="normal" />
-          </Oval>
-
-          {/* 손잡이 고리. 몸통 뒤. 두 원 + evenOdd로 구멍을 낸다. */}
-          <Path path={RING_PATH} fillType="evenOdd">
-            <LinearGradient
-              start={vec(RING.cx - RING.outerR, RING.cy)}
-              end={vec(RING.cx + RING.outerR, RING.cy)}
-              colors={BODY_GRADIENT_COLORS}
-            />
-          </Path>
-
-          {/* 몸통. 타격 순간 살짝 눌린다 — 중심 기준 scale. */}
-          <Group transform={bodyTransform} origin={vec(BODY_SHAPE.cx, BODY_SHAPE.cy)}>
-            <Oval
-              x={BODY_SHAPE.cx - BODY_SHAPE.rx}
-              y={BODY_SHAPE.cy - BODY_SHAPE.ry}
-              width={BODY_SHAPE.rx * 2}
-              height={BODY_SHAPE.ry * 2}>
-              <RadialGradient
-                c={vec(BODY_SHAPE.cx - 28, BODY_SHAPE.cy - 34)}
-                r={150}
-                colors={BODY_GRADIENT_COLORS}
-              />
-            </Oval>
-            <RoundedRect
-              x={SLIT.x}
-              y={SLIT.y}
-              width={SLIT.width}
-              height={SLIT.height}
-              r={SLIT.r}
-              color={PALETTE.cavity}
-            />
-            <Oval
-              x={HOLE.x}
-              y={HOLE.y}
-              width={HOLE.width}
-              height={HOLE.height}
-              color={PALETTE.cavity}
-            />
-          </Group>
-
-          {/* 채. 위 끝이 축. 로컬 좌표는 축이 원점이다. */}
-          <Group transform={stickTransform}>
-            <RoundedRect
-              x={-STICK.shaftW / 2}
-              y={0}
-              width={STICK.shaftW}
-              height={STICK.shaftLen}
-              r={STICK.shaftW / 2}>
-              <LinearGradient
-                start={vec(-STICK.shaftW / 2, 0)}
-                end={vec(STICK.shaftW / 2, 0)}
-                colors={STICK_GRADIENT_COLORS}
-              />
-            </RoundedRect>
-            <Circle cx={0} cy={STICK.tipY} r={STICK.tipR}>
-              <LinearGradient
-                start={vec(-STICK.tipR, 0)}
-                end={vec(STICK.tipR, 0)}
-                colors={STICK_GRADIENT_COLORS}
-              />
-            </Circle>
-          </Group>
-        </Group>
-      </Canvas>
-
-      {/*
-        텍스트는 RN 쪽이다. Skia 텍스트는 폰트 에셋을 요구하므로 피한다(키캡
-        전례). 설계 상자와 같은 크기의 뷰를 BODY가 가운데 정렬해주므로 좌표를
-        캔버스의 센터링 transform과 따로 계산할 필요가 없다.
-      */}
-      <View style={DESIGN_BOX} pointerEvents="none">
-        <Text style={TITLE}>번뇌가 사라지는 중</Text>
-        <View style={COUNT_ROW}>
-          <Text style={REMAINING}>{remainingOf(count)}</Text>
-          <Text style={REMAINING_UNIT}>남음</Text>
-        </View>
-        <View style={TRACK}>
-          <Animated.View style={[FILL, fillStyle]} />
-        </View>
-        <Text style={SUBLINE}>
-          총 {count.toLocaleString()}개 소멸 · {lapsOf(count)}바퀴 완주
-        </Text>
-
-        <QuoteCard count={count} />
+    <View style={DESIGN_BOX} pointerEvents="none">
+      <Text style={TITLE}>번뇌가 사라지는 중</Text>
+      <View style={COUNT_ROW}>
+        <Text style={REMAINING}>{remainingOf(count)}</Text>
+        <Text style={REMAINING_UNIT}>남음</Text>
       </View>
+      <View style={TRACK}>
+        <Animated.View style={[FILL, fillStyle]} />
+      </View>
+      <Text style={SUBLINE}>
+        총 {count.toLocaleString()}개 소멸 · {lapsOf(count)}바퀴 완주
+      </Text>
+
+      <QuoteCard count={count} />
     </View>
   );
 }
