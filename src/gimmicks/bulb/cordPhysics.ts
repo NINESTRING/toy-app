@@ -35,13 +35,10 @@ export const NODE_COUNT = 12;
 const CORD_SLACK = 1.0;
 
 /** 앵커에서 휴지점까지의 직선거리 = 줄의 원래 길이. */
-const SPAN = Math.sqrt(
-  (CORD_REST.x - CORD_ANCHOR.x) ** 2 + (CORD_REST.y - CORD_ANCHOR.y) ** 2
-);
+const SPAN = Math.sqrt((CORD_REST.x - CORD_ANCHOR.x) ** 2 + (CORD_REST.y - CORD_ANCHOR.y) ** 2);
 
 /** 세그먼트 하나의 휴지 길이. */
 export const SEGMENT_LEN = (SPAN * CORD_SLACK) / (NODE_COUNT - 1);
-
 
 /** ⚠️ 물리 상수 전부 실기기 미검증 — 퍼퍼 색종이·다이얼과 같은 상태다. */
 const GRAVITY = 2200; // pt/s²
@@ -135,8 +132,7 @@ export function stepCord(nodes: CordNode[], dt: number, tailX: number, tailY: nu
   const damp = Math.max(0, 1 - DRAG * dt);
 
   /** 매듭이 이번 프레임에 움직인 속력. 좌굴력의 세기를 여기서 받는다. */
-  const tailSpeed =
-    Math.sqrt((tailX - nodes[last].x) ** 2 + (tailY - nodes[last].y) ** 2) / dt;
+  const tailSpeed = Math.sqrt((tailX - nodes[last].x) ** 2 + (tailY - nodes[last].y) ** 2) / dt;
   const buckle = BUCKLE * Math.min(1, tailSpeed / BUCKLE_REF_SPEED);
 
   for (let i = 1; i < last; i++) {
@@ -154,8 +150,7 @@ export function stepCord(nodes: CordNode[], dt: number, tailX: number, tailY: nu
     const next = nodes[i + 1];
     const backSlack =
       1 - Math.sqrt((node.x - previous.x) ** 2 + (node.y - previous.y) ** 2) / SEGMENT_LEN;
-    const frontSlack =
-      1 - Math.sqrt((next.x - node.x) ** 2 + (next.y - node.y) ** 2) / SEGMENT_LEN;
+    const frontSlack = 1 - Math.sqrt((next.x - node.x) ** 2 + (next.y - node.y) ** 2) / SEGMENT_LEN;
     const slack = Math.max(0, (backSlack + frontSlack) / 2);
     const shape = Math.sin((2 * Math.PI * i) / last);
     node.vx += buckle * slack * shape * dt;
