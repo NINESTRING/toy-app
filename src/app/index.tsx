@@ -23,7 +23,7 @@ import { useGimmickCount, useGimmickStore } from '@/store/gimmickState';
  * 제 역할을 한다. 예외는 눌림 스케일 하나뿐이다 — 아래 `GimmickTile`.
  *
  * §2: 캐러셀 라이브러리는 쓰지 않는다 — RNR 카드 + FlashList로 충분.
- * 지금은 기믹이 4개라 ScrollView로 둔다. 목록이 길어지면 FlashList로 바꾼다.
+ * 지금은 기믹이 5개라 ScrollView로 둔다. 목록이 길어지면 FlashList로 바꾼다.
  * 2열이 되면서 그 시점은 멀어졌다 — 같은 스크롤 길이가 기믹 두 배를 담는다.
  */
 
@@ -49,7 +49,7 @@ export default function GalleryScreen() {
    * 0을 "아직 안 만져봤다"는 뜻으로 쓰므로(아래 `GimmickTile`) 그대로 두면
    * 1000번 만진 장난감에 "누르기"라고 적힌다.
    *
-   * MMKV 읽기는 동기이고 기믹 수만큼(지금 4번)이라 마운트 때 한 번 도는 건
+   * MMKV 읽기는 동기이고 기믹 수만큼(지금 5번)이라 마운트 때 한 번 도는 건
    * 문제가 아니다. 이미 올라간 기믹은 `hydrate`가 자기 가드로 걸러낸다.
    */
   React.useEffect(() => {
@@ -85,8 +85,8 @@ export default function GalleryScreen() {
               {/*
                 마지막 줄이 덜 찼을 때의 빈 자리. 이게 없으면 홀수 번째 기믹의
                 타일이 줄을 독차지해 `aspect-square`가 화면 폭짜리 정사각형을
-                만든다. 기믹이 4개인 지금은 안 쓰이지만, 5개가 되는 순간
-                필요해지는 자리다.
+                만든다. 기믹이 5개인 지금 이 자리가 실제로 쓰인다(마지막 줄
+                1개).
               */}
               {row.length < TILE_COLUMNS ? <View className="flex-1" /> : null}
             </View>
