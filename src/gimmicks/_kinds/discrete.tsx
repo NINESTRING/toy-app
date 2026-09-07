@@ -59,7 +59,16 @@ export function DiscreteGimmick({ haptic, config, onInteract, hitTest, children 
          */
         .onBegin((event) => {
           'worklet';
-          /** 빗나간 탭. 아무 일도 없다 — 목탁의 채나 배경을 누른 경우. */
+          /**
+           * 빗나간 탭. 아무 일도 없다 — 목탁의 채나 배경을 누른 경우.
+           *
+           * tug의 `canGrab`과 달리 여기선 거부해도 `manager.fail()`을 부르지
+           * 않는다. `Tap`은 손가락이 조금이라도 움직이면 스스로 실패하는
+           * 제스처라 tug의 수동 활성화 `Pan`과 달리 화면을 계속 삼킬 위험이
+           * 없다 — 그래서 빗나간 탭도 스와이프 뒤로가기 같은 다른 제스처를
+           * 막지 않는다. 게다가 셸의 오버레이 버튼은 이 제스처 뷰보다 위에
+           * 있어 애초에 여기까지 오지도 않는다.
+           */
           if (hitTest !== undefined && !hitTest(event.x, event.y)) {
             return;
           }
@@ -73,10 +82,16 @@ export function DiscreteGimmick({ haptic, config, onInteract, hitTest, children 
          * 문지르듯 두드릴 때 버튼이 눌린 채로 남는다.
          *
          * 릴리스 햅틱은 실제로 눌렸던 탭에만 — 빗나간 탭(`hitTest` false)에
-         * 뗄 때 소리가 나면 안 된다.
+         * 릴리스 햅틱이 나가면 안 된다.
          */
         .onFinalize(() => {
           'worklet';
+          /**
+           * `pressed`는 탭 하나가 아니라 공유된 눌림 플래그 하나다 — 손가락별
+           * 상태가 아니다. 그래서 두 손가락이 겹쳐 짚었다가 하나씩 뗄 때,
+           * 이론상 한쪽의 릴리스 햅틱이 씹힐 수 있다. 지금 릴리스 햅틱을 쓰는
+           * 기믹이 없어 실제 문제는 없다 — 생기면 손가락별 추적으로 바꾼다.
+           */
           const wasPressed = pressed.value === 1;
           pressed.value = 0;
           if (hasReleaseHaptic && wasPressed) {
