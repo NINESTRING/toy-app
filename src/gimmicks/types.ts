@@ -4,7 +4,6 @@ import type { Pattern } from 'react-native-pulsar';
 
 import type { SoundKey } from '@/audio/assets';
 import type { PresetName } from '@/haptics/presets';
-import type { TintName } from '@/lib/tints';
 
 /**
  * 기믹 레지스트리 계약. (§4)
@@ -257,14 +256,13 @@ export type GimmickLook = {
    * 이것 때문에 registry가 완전한 JSON은 아니게 된다. EAS Update(§7)는 JS
    * 번들을 실어 보내므로 영향 없고, 서버 주도 registry는 지금 없는 요구사항
    * 이라 감수한다. 필요해지면 문자열 키로 바꾸고 셸에 아이콘 맵을 두면
-   * 된다 — `tint`가 이미 그 형태다.
+   * 된다.
+   *
+   * 색은 없다. 갤러리 띠의 색은 목록 위치가 정한다(단색 램프, `app/index.tsx`
+   * 의 `STOPS`). 기믹별 틴트(`look.tint`)는 2열 타일 시절에 있었고 월페이퍼
+   * 스택으로 바꾸며 소비자가 사라져 지웠다.
    */
   icon: LucideIcon;
-  /**
-   * 틴트 이름. 실제 클래스 문자열은 셸(`lib/tints.ts`)이 갖는다 — 색을 어떻게
-   * 칠하는지는 테마의 관심사이고, registry는 "이 기믹은 파란색"까지만 말한다.
-   */
-  tint: TintName;
 };
 
 type GimmickBase = {
@@ -276,7 +274,7 @@ type GimmickBase = {
    * 컴포넌트는 소리를 모른다.
    */
   sound?: SoundKey;
-  /** 갤러리 타일의 아이콘과 틴트. */
+  /** 갤러리 띠의 아이콘. */
   look: GimmickLook;
 };
 

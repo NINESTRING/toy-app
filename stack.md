@@ -158,7 +158,7 @@ type Gimmick = {
   kind: 'discrete' | 'detented' | 'grid' | 'physics';
   haptic: HapticSpec;              // 프리셋 이름 or 커스텀 패턴 JSON
   sound?: string;                  // 에셋 키
-  look: { icon: LucideIcon; tint: TintName };  // 갤러리 타일
+  look: { icon: LucideIcon };      // 갤러리 띠의 아이콘
   config: Record<string, any>;     // detentCount, gridSize, friction 등
   component: () => Promise<ComponentType>;  // lazy
 };
@@ -173,16 +173,19 @@ type Gimmick = {
 
    > **따라서 갤러리 타일에 살아있는 미리보기를 넣을 수 없다.** 원칙 2가
    > 갤러리의 기믹 컴포넌트 import를 금지하므로, 갤러리가 쓸 시각 정보는
-   > 컴포넌트 밖에 있어야 한다. 그래서 `look`(아이콘 + 틴트 이름)이
+   > 컴포넌트 밖에 있어야 한다. 그래서 `look`(아이콘)이
    > 레지스트리 항목에 있다 — 셸에 별도 맵을 두면 기믹 추가할 곳이 셋이 되어
    > "항목 하나 + 폴더 하나"가 깨진다. `look.icon`이 컴포넌트 참조라
    > 레지스트리가 완전한 JSON은 아니게 되는데, EAS Update(§7)는 영향 없고
    > 서버 주도 레지스트리는 지금 요구사항이 아니라 감수했다.
    >
-   > 타일 틴트는 **그 기믹 씬의 지배색**에서 딴다(키캡 파랑, 다이얼 민트,
-   > 전구 앰버, 포퍼 로즈). 눌러 들어가면 같은 색이 화면을 채운다. 색 자체는
-   > 셸(`lib/tints.ts`)이 갖고 테마 토큰으로는 올리지 않는다 — 무채색 토큰은
-   > 그대로고, 색은 갤러리 타일 전용이다.
+   > 갤러리는 잠금화면 월페이퍼처럼 보이는 **색 띠 스택**이다(2026-09-09).
+   > 띠 색은 기믹이 아니라 목록 위치가 정한다 — 숲 초록 단색 램프가 배경 쪽
+   > 밝기에서 시작해 반대 극(크림)으로 끝난다. 팔레트 여섯 색은 `global.css`
+   > `@theme`에 `forest-*`/`sage-200`/`cream-100`으로 있고 갤러리에만 쓴다.
+   > 시맨틱 토큰은 무채색 그대로다. 기믹별 틴트(`look.tint`, `lib/tints.ts`)는
+   > 2열 타일 시절의 것으로 소비자가 없어져 지웠다. 설계:
+   > `docs/superpowers/specs/2026-09-09-gallery-wallpaper-stack-design.md`.
 3. **햅틱 엔진은 싱글톤.** Core Haptics 엔진 시작에 수십 ms. 기믹 전환마다
    새로 만들면 첫 딸깍이 씹힌다. Pulsar의 preloading/caching 문서 참고.
 

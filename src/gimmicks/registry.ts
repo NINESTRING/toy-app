@@ -30,8 +30,7 @@ export const GIMMICKS = [
   {
     id: 'keycap',
     name: '키캡',
-    /** 틴트는 이 기믹의 지배색에서 왔다 — 배경 그라디언트 #1a5ce0. */
-    look: { icon: KeyboardIcon, tint: 'blue' },
+    look: { icon: KeyboardIcon },
     kind: 'discrete',
     /**
      * 축은 적축 하나만 남겼다(갈축·사일런트 삭제). 셸의 축 선택 칩은
@@ -51,8 +50,7 @@ export const GIMMICKS = [
   {
     id: 'dial',
     name: '다이얼',
-    /** 틴트는 이 기믹의 지배색에서 왔다 — 혜성 팔레트 첫 색 #1DD1A1. */
-    look: { icon: Disc3Icon, tint: 'emerald' },
+    look: { icon: Disc3Icon },
     kind: 'detented',
     /**
      * ⚠️ 미검증 값. 위와 같은 이유로 실기기 확인 필요.
@@ -93,8 +91,7 @@ export const GIMMICKS = [
   {
     id: 'bulb',
     name: '전구',
-    /** 틴트는 이 기믹의 지배색에서 왔다 — 글로우 #ffd97a. */
-    look: { icon: LightbulbIcon, tint: 'amber' },
+    look: { icon: LightbulbIcon },
     kind: 'tug',
     /**
      * 임계값을 넘긴 뒤 손을 떼는 순간의 딸깍. 실제 풀체인 스위치의 묵직한
@@ -119,8 +116,7 @@ export const GIMMICKS = [
   {
     id: 'popper',
     name: '파티 포퍼',
-    /** 틴트는 이 기믹의 지배색에서 왔다 — 콘 베이스 #ff6b6b. */
-    look: { icon: PartyPopperIcon, tint: 'rose' },
+    look: { icon: PartyPopperIcon },
     kind: 'sling',
     /**
      * 당기는 동안 파워 비례 차징 럼블(연속 엔벨로프), 놓는 순간 펑.
@@ -155,8 +151,7 @@ export const GIMMICKS = [
   {
     id: 'moktak',
     name: '목탁',
-    /** 틴트는 이 기믹의 지배색에서 왔다 — 몸통 그라디언트 중간 #b5532b. */
-    look: { icon: DrumIcon, tint: 'orange' },
+    look: { icon: DrumIcon },
     kind: 'discrete',
     /**
      * `knock`은 전구에서 실기기 확인된 값이라 무음 위험이 없다(§5 "느낌 없는

@@ -11,6 +11,18 @@
   --radius-xl: calc(var(--radius) + 4px);
 
   --spacing-hairline: hairlineWidth();
+
+  /*
+   * 갤러리 월페이퍼 램프. 숲 초록이 어두운 데서 밝은 데로 내려가다 크림으로
+   * 끊긴다. 시맨틱 토큰(--color-primary류)은 무채색 그대로고, 이 여섯 색은
+   * 갤러리 띠·배경에만 쓴다. 설계: docs/superpowers/specs/2026-09-09-gallery-wallpaper-stack-design.md
+   */
+  --color-forest-950: #0b3b2a;
+  --color-forest-800: #0f5a3c;
+  --color-forest-700: #137a4e;
+  --color-forest-600: #1f9a62;
+  --color-sage-200: #cfe5d2;
+  --color-cream-100: #f3e9d8;
 }
 
 @layer theme {
